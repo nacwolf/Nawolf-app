@@ -1,22 +1,27 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Kostr API - food manufacturer cost and margin tracking
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: ingredients
+    description: Ingredient management
+  - name: skus
+    description: SKU management
+  - name: dashboard
+    description: Dashboard analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +29,324 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /ingredients:
+    get:
+      operationId: listIngredients
+      tags: [ingredients]
+      summary: List all ingredients with current price
+      responses:
+        "200":
+          description: List of ingredients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngredientWithPrice"
+    post:
+      operationId: createIngredient
+      tags: [ingredients]
+      summary: Create a new ingredient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIngredientBody"
+      responses:
+        "201":
+          description: Created ingredient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ingredient"
+
+  /ingredients/{id}:
+    get:
+      operationId: getIngredient
+      tags: [ingredients]
+      summary: Get ingredient by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ingredient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientWithPrice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ingredients/{id}/price:
+    post:
+      operationId: updateIngredientPrice
+      tags: [ingredients]
+      summary: Update ingredient price — auto-recalculates affected SKUs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIngredientPriceBody"
+      responses:
+        "200":
+          description: Updated price and recalculated SKUs count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateIngredientPriceResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ingredients/{id}/price-history:
+    get:
+      operationId: getIngredientPriceHistory
+      tags: [ingredients]
+      summary: Get price history for an ingredient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Price history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngredientPrice"
+
+  /skus:
+    get:
+      operationId: listSkus
+      tags: [skus]
+      summary: List all SKUs with current margin status
+      responses:
+        "200":
+          description: List of SKUs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkuWithMargin"
+    post:
+      operationId: createSku
+      tags: [skus]
+      summary: Create a new SKU
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSkuBody"
+      responses:
+        "201":
+          description: Created SKU
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkuWithMargin"
+
+  /skus/{id}:
+    get:
+      operationId: getSku
+      tags: [skus]
+      summary: Get SKU detail with cost lines and snapshots
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: SKU detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkuDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateSku
+      tags: [skus]
+      summary: Update SKU sell price or other fields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSkuBody"
+      responses:
+        "200":
+          description: Updated SKU
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkuWithMargin"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSku
+      tags: [skus]
+      summary: Delete a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /skus/{id}/cost-lines:
+    get:
+      operationId: getSkuCostLines
+      tags: [skus]
+      summary: Get cost lines for a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cost lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostLine"
+    post:
+      operationId: addSkuCostLine
+      tags: [skus]
+      summary: Add a cost line to a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddCostLineBody"
+      responses:
+        "201":
+          description: Created cost line
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostLine"
+
+  /skus/{id}/cost-lines/{costLineId}:
+    delete:
+      operationId: deleteSkuCostLine
+      tags: [skus]
+      summary: Delete a cost line from a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: costLineId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /skus/{id}/snapshots:
+    get:
+      operationId: getSkuSnapshots
+      tags: [skus]
+      summary: Get historical snapshots for a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkuSnapshot"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard KPI summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/margin-trends:
+    get:
+      operationId: getMarginTrends
+      tags: [dashboard]
+      summary: Get margin trend data for charts
+      responses:
+        "200":
+          description: Margin trends
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarginTrendPoint"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +357,395 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        unit:
+          type: string
+        supplier:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - category
+        - unit
+        - createdAt
+
+    IngredientWithPrice:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        unit:
+          type: string
+        supplier:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        currentPrice:
+          type: ["number", "null"]
+        priceEffectiveDate:
+          type: ["string", "null"]
+        skuCount:
+          type: integer
+      required:
+        - id
+        - name
+        - category
+        - unit
+        - createdAt
+        - skuCount
+
+    IngredientPrice:
+      type: object
+      properties:
+        id:
+          type: integer
+        ingredientId:
+          type: integer
+        price:
+          type: number
+        effectiveDate:
+          type: string
+        reason:
+          type: ["string", "null"]
+        loggedBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - ingredientId
+        - price
+        - effectiveDate
+        - createdAt
+
+    CreateIngredientBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        unit:
+          type: string
+        supplier:
+          type: ["string", "null"]
+        initialPrice:
+          type: ["number", "null"]
+      required:
+        - name
+        - category
+        - unit
+
+    UpdateIngredientPriceBody:
+      type: object
+      properties:
+        price:
+          type: number
+        effectiveDate:
+          type: string
+        reason:
+          type: ["string", "null"]
+      required:
+        - price
+        - effectiveDate
+
+    UpdateIngredientPriceResponse:
+      type: object
+      properties:
+        ingredientPrice:
+          $ref: "#/components/schemas/IngredientPrice"
+        affectedSkuCount:
+          type: integer
+      required:
+        - ingredientPrice
+        - affectedSkuCount
+
+    Sku:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuCode:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        unitSize:
+          type: string
+        sellPrice:
+          type: number
+        customerName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - skuCode
+        - name
+        - category
+        - unitSize
+        - sellPrice
+        - createdAt
+
+    SkuWithMargin:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuCode:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        unitSize:
+          type: string
+        sellPrice:
+          type: number
+        customerName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        totalCogs:
+          type: ["number", "null"]
+        grossMargin:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [healthy, review, critical, unknown]
+      required:
+        - id
+        - skuCode
+        - name
+        - category
+        - unitSize
+        - sellPrice
+        - createdAt
+        - status
+
+    SkuDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuCode:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        unitSize:
+          type: string
+        sellPrice:
+          type: number
+        customerName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        totalCogs:
+          type: ["number", "null"]
+        grossMargin:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [healthy, review, critical, unknown]
+        costLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/CostLine"
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkuSnapshot"
+      required:
+        - id
+        - skuCode
+        - name
+        - category
+        - unitSize
+        - sellPrice
+        - createdAt
+        - status
+        - costLines
+        - snapshots
+
+    CreateSkuBody:
+      type: object
+      properties:
+        skuCode:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        unitSize:
+          type: string
+        sellPrice:
+          type: number
+        customerName:
+          type: ["string", "null"]
+        costLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddCostLineBody"
+      required:
+        - skuCode
+        - name
+        - category
+        - unitSize
+        - sellPrice
+
+    UpdateSkuBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        unitSize:
+          type: ["string", "null"]
+        sellPrice:
+          type: ["number", "null"]
+        customerName:
+          type: ["string", "null"]
+
+    CostLine:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuId:
+          type: integer
+        ingredientId:
+          type: integer
+        ingredientName:
+          type: string
+        ingredientUnit:
+          type: string
+        currentPrice:
+          type: ["number", "null"]
+        quantityPerUnit:
+          type: number
+        notes:
+          type: ["string", "null"]
+        lineCost:
+          type: ["number", "null"]
+      required:
+        - id
+        - skuId
+        - ingredientId
+        - ingredientName
+        - ingredientUnit
+        - quantityPerUnit
+
+    AddCostLineBody:
+      type: object
+      properties:
+        ingredientId:
+          type: integer
+        quantityPerUnit:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required:
+        - ingredientId
+        - quantityPerUnit
+
+    SkuSnapshot:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuId:
+          type: integer
+        snapshotDate:
+          type: string
+        totalCogs:
+          type: number
+        sellPrice:
+          type: number
+        grossMargin:
+          type: number
+        triggeredBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - skuId
+        - snapshotDate
+        - totalCogs
+        - sellPrice
+        - grossMargin
+        - createdAt
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalSkus:
+          type: integer
+        healthyCount:
+          type: integer
+        reviewCount:
+          type: integer
+        criticalCount:
+          type: integer
+        unknownCount:
+          type: integer
+        avgMargin:
+          type: ["number", "null"]
+        totalIngredients:
+          type: integer
+        recentPriceChanges:
+          type: integer
+      required:
+        - totalSkus
+        - healthyCount
+        - reviewCount
+        - criticalCount
+        - unknownCount
+        - totalIngredients
+        - recentPriceChanges
+
+    MarginTrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        avgMargin:
+          type: number
+        healthyCount:
+          type: integer
+        reviewCount:
+          type: integer
+        criticalCount:
+          type: integer
+      required:
+        - date
+        - avgMargin
+        - healthyCount
+        - reviewCount
+        - criticalCount
