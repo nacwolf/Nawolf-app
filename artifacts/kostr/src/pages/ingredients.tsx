@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useListIngredients, useCreateIngredient, useUpdateIngredientPrice, getListIngredientsQueryKey } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,33 @@ const CATEGORY_DOT: Record<string, string> = {
   "Overhead": "bg-slate-400",
   "Quality & Compliance": "bg-blue-500",
   "Delivery": "bg-amber-600",
+};
+
+const CATEGORY_HEADER_BG: Record<string, string> = {
+  "Raw Materials": "bg-green-50 border-b border-green-100",
+  "Packaging": "bg-purple-50 border-b border-purple-100",
+  "Labor": "bg-orange-50 border-b border-orange-100",
+  "Overhead": "bg-slate-50 border-b border-slate-200",
+  "Quality & Compliance": "bg-blue-50 border-b border-blue-100",
+  "Delivery": "bg-amber-50 border-b border-amber-100",
+};
+
+const CATEGORY_BORDER_LEFT: Record<string, string> = {
+  "Raw Materials": "border-l-4 border-l-green-500",
+  "Packaging": "border-l-4 border-l-purple-500",
+  "Labor": "border-l-4 border-l-orange-500",
+  "Overhead": "border-l-4 border-l-slate-400",
+  "Quality & Compliance": "border-l-4 border-l-blue-500",
+  "Delivery": "border-l-4 border-l-amber-600",
+};
+
+const CATEGORY_TITLE_COLOR: Record<string, string> = {
+  "Raw Materials": "text-green-800",
+  "Packaging": "text-purple-800",
+  "Labor": "text-orange-800",
+  "Overhead": "text-slate-700",
+  "Quality & Compliance": "text-blue-800",
+  "Delivery": "text-amber-800",
 };
 
 const UNITS_BY_CATEGORY: Record<string, string[]> = {
@@ -255,43 +282,44 @@ export default function CostElements() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
-              <CardContent><Skeleton className="h-32 w-full" /></CardContent>
+            <Card key={i} className="overflow-hidden">
+              <div className="h-14 bg-muted animate-pulse" />
+              <CardContent className="pt-4"><Skeleton className="h-24 w-full" /></CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {CATEGORIES.map((cat) => {
             const items = byCategory[cat] || [];
             return (
-              <Card key={cat}>
-                <CardHeader className="pb-3">
+              <Card key={cat} className={`overflow-hidden shadow-sm ${CATEGORY_BORDER_LEFT[cat]}`}>
+                <div className={`px-6 py-4 ${CATEGORY_HEADER_BG[cat]}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${CATEGORY_DOT[cat]}`} />
-                      <CardTitle className="text-base">{cat}</CardTitle>
-                      <Badge variant="secondary" className="text-xs font-normal">
+                      <CardTitle className={`text-base font-bold uppercase tracking-wide ${CATEGORY_TITLE_COLOR[cat]}`}>
+                        {cat}
+                      </CardTitle>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[cat]}`}>
                         {items.length} item{items.length !== 1 ? "s" : ""}
-                      </Badge>
+                      </span>
                     </div>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                      className="flex-shrink-0 h-7 text-xs bg-white/70 hover:bg-white"
                       onClick={() => openAdd(cat)}
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                      <Plus className="w-3 h-3 mr-1" /> Add
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground ml-5">{CATEGORY_DESCRIPTIONS[cat]}</p>
-                </CardHeader>
-                <CardContent className="pt-0">
+                  <p className="text-xs text-muted-foreground mt-1">{CATEGORY_DESCRIPTIONS[cat]}</p>
+                </div>
+                <CardContent className="p-0">
                   {items.length === 0 ? (
-                    <div className="border border-dashed rounded-lg py-8 text-center text-muted-foreground text-sm">
+                    <div className="py-10 text-center text-muted-foreground text-sm">
                       No {cat.toLowerCase()} items yet.{" "}
                       <button
                         className="text-primary hover:underline"
@@ -301,19 +329,18 @@ export default function CostElements() {
                       </button>
                     </div>
                   ) : (
-                    <div className="border rounded-md">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Supplier</TableHead>
-                            <TableHead className="text-right">Current Price</TableHead>
-                            <TableHead className="text-right">Change</TableHead>
-                            <TableHead className="text-right">Last Updated</TableHead>
-                            <TableHead className="text-right">Used In</TableHead>
-                            <TableHead className="w-10" />
-                          </TableRow>
-                        </TableHeader>
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableHead className="pl-6">Name</TableHead>
+                          <TableHead>Supplier</TableHead>
+                          <TableHead className="text-right">Current Price</TableHead>
+                          <TableHead className="text-right">Change</TableHead>
+                          <TableHead className="text-right">Last Updated</TableHead>
+                          <TableHead className="text-right">Used In</TableHead>
+                          <TableHead className="w-10 pr-4" />
+                        </TableRow>
+                      </TableHeader>
                         <TableBody>
                           {items.map((ing) => (
                             <TableRow
@@ -321,7 +348,7 @@ export default function CostElements() {
                               className="cursor-pointer hover:bg-muted/50 group"
                               onClick={() => openEdit(ing)}
                             >
-                              <TableCell>
+                              <TableCell className="pl-6">
                                 <span className="font-medium group-hover:text-primary transition-colors">
                                   {ing.name}
                                 </span>
@@ -355,7 +382,6 @@ export default function CostElements() {
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
                   )}
                 </CardContent>
               </Card>
