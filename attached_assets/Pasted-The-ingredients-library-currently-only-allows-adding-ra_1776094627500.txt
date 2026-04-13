@@ -1,0 +1,59 @@
+The ingredients library currently only allows adding raw food ingredients. 
+I need it to support ALL 6 cost types that go into calculating a product's 
+true COGS. Please update the ingredients section and the SKU cost line builder 
+to support all of the following:
+
+1. Raw Material — unit is kg / litre / each / g / ml
+   Example: Wheat Flour at €0.76/kg
+
+2. Packaging — unit is "each"
+   Example: Bread Bag at €0.09 each, Product Label at €0.06 each
+
+3. Labor — unit is "hour"
+   Example: Production Labor at €15.00/hour (fully-loaded rate)
+   When adding to a SKU cost line, the quantity field should show 
+   a helper text: "Enter hours per unit — e.g. 0.083 = 5 minutes"
+
+4. Overhead — unit is "each"
+   Example: Overhead Allocation at €0.10 per unit
+   This is a pre-calculated number: monthly fixed costs ÷ monthly 
+   units produced. Add a helper tooltip explaining this.
+   When adding to a SKU, quantity is always 1.
+
+5. Quality & Compliance — unit is "each"
+   Example: QC Testing at €0.06 per unit
+   (Pre-calculated: batch test cost ÷ batch size)
+
+6. Delivery — unit is "each"
+   Example: Local Delivery at €0.18 per unit
+
+Changes needed:
+
+A) Ingredients list page:
+   - Show a category filter tab bar at the top: 
+     All | Raw Material | Packaging | Labor | Overhead | QC | Delivery
+   - When adding a new ingredient, the category dropdown must include 
+     all 6 types above
+   - The unit dropdown should show contextually relevant options based 
+     on category — e.g. Labor only shows "hour", Overhead shows "each"
+   - Pre-populate the list with sensible example entries for each 
+     category so the manager can see what each type looks like
+
+B) SKU cost line builder:
+   - When selecting an ingredient for a cost line, group the dropdown 
+     by category (Raw Material, Packaging, Labor, Overhead, QC, Delivery)
+   - Show a small category badge next to each cost line row 
+     (colour-coded: green=Raw Material, purple=Packaging, 
+     orange=Labor, grey=Overhead, blue=QC, brown=Delivery)
+   - In the cost breakdown donut chart on the SKU detail page, 
+     show the split by these 6 categories
+
+C) Dashboard cost breakdown:
+   - On the SKU detail page, the cost breakdown section should show 
+     what % of total COGS comes from each category, not just a total number.
+     Show a small bar or donut: Raw Material X% | Packaging X% | Labor X% | 
+     Overhead X% | QC X% | Delivery X%
+
+The underlying data model (ingredients table with category field, 
+ingredient_prices, cost_lines) does NOT need to change — just the UI 
+and the way data is presented and filtered.
