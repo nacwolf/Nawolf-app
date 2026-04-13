@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, max, sql } from "drizzle-orm";
 import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable } from "@workspace/db";
 import {
   CreateSkuBody,
@@ -34,12 +34,19 @@ router.get("/skus", requireAuth, async (req, res): Promise<void> => {
     skus.map(async (sku) => {
       const { totalCogs, grossMargin } = await recalculateSkuCogs(sku.id);
       const status = computeMarginStatus(grossMargin);
+
+      const [lastSnap] = await db
+        .select({ lastChangedDate: max(skuSnapshotsTable.snapshotDate) })
+        .from(skuSnapshotsTable)
+        .where(eq(skuSnapshotsTable.skuId, sku.id));
+
       return {
         ...sku,
         sellPrice: parseFloat(sku.sellPrice),
         totalCogs,
         grossMargin,
         status,
+        lastChangedDate: lastSnap?.lastChangedDate ?? null,
       };
     })
   );
@@ -101,6 +108,7 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
       ingredientId: costLinesTable.ingredientId,
       ingredientName: ingredientsTable.name,
       ingredientUnit: ingredientsTable.unit,
+      ingredientCategory: ingredientsTable.category,
       quantityPerUnit: costLinesTable.quantityPerUnit,
       notes: costLinesTable.notes,
     })

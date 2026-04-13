@@ -17,6 +17,7 @@ import SkuNew from "@/pages/skus/new";
 import SkuDetail from "@/pages/skus/[id]";
 import IngredientsList from "@/pages/ingredients";
 import IngredientDetail from "@/pages/ingredients/[id]";
+import ActivityFeed from "@/pages/activity";
 import NotFound from "@/pages/not-found";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -87,29 +88,33 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={Home} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
-            
+
             <Route path="/dashboard">
               <ProtectedRoute component={Dashboard} />
             </Route>
-            
+
             <Route path="/skus/new">
               <ProtectedRoute component={SkuNew} />
             </Route>
-            
+
             <Route path="/skus/:id">
               {(params) => <ProtectedRoute component={() => <SkuDetail id={params.id} />} />}
             </Route>
-            
+
             <Route path="/skus">
               <ProtectedRoute component={SkusList} />
             </Route>
-            
+
             <Route path="/ingredients/:id">
               {(params) => <ProtectedRoute component={() => <IngredientDetail id={params.id} />} />}
             </Route>
-            
+
             <Route path="/ingredients">
               <ProtectedRoute component={IngredientsList} />
+            </Route>
+
+            <Route path="/activity">
+              <ProtectedRoute component={ActivityFeed} />
             </Route>
 
             <Route component={NotFound} />

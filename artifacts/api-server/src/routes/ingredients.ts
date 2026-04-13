@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql } from "drizzle-orm";
-import { db, ingredientsTable, ingredientPricesTable, costLinesTable } from "@workspace/db";
+import { db, ingredientsTable, ingredientPricesTable, costLinesTable, skusTable } from "@workspace/db";
 import {
   CreateIngredientBody,
   GetIngredientParams,
@@ -29,23 +29,31 @@ router.get("/ingredients", requireAuth, async (req, res): Promise<void> => {
     ingredients.map(async (ing) => {
       const currentPrice = await getCurrentPrice(ing.id);
 
-      const [priceRow] = await db
-        .select({ effectiveDate: ingredientPricesTable.effectiveDate })
+      const priceRows = await db
+        .select({ effectiveDate: ingredientPricesTable.effectiveDate, price: ingredientPricesTable.price })
         .from(ingredientPricesTable)
         .where(eq(ingredientPricesTable.ingredientId, ing.id))
         .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-        .limit(1);
+        .limit(2);
 
       const [countRow] = await db
         .select({ count: sql<number>`count(distinct ${costLinesTable.skuId})` })
         .from(costLinesTable)
         .where(eq(costLinesTable.ingredientId, ing.id));
 
+      const previousPrice = priceRows[1] ? parseFloat(priceRows[1].price) : null;
+      const priceChangePct =
+        previousPrice && currentPrice !== null && previousPrice !== 0
+          ? ((currentPrice - previousPrice) / previousPrice) * 100
+          : null;
+
       return {
         ...ing,
         currentPrice,
-        priceEffectiveDate: priceRow?.effectiveDate ?? null,
+        priceEffectiveDate: priceRows[0]?.effectiveDate ?? null,
         skuCount: Number(countRow?.count ?? 0),
+        previousPrice,
+        priceChangePct,
       };
     })
   );
@@ -110,6 +118,22 @@ router.get("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
     priceEffectiveDate: priceRow?.effectiveDate ?? null,
     skuCount: Number(countRow?.count ?? 0),
   });
+});
+
+router.get("/ingredients/:id/skus", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ingredient id" });
+    return;
+  }
+
+  const rows = await db
+    .selectDistinct({ id: skusTable.id, name: skusTable.name, skuCode: skusTable.skuCode })
+    .from(costLinesTable)
+    .innerJoin(skusTable, eq(costLinesTable.skuId, skusTable.id))
+    .where(eq(costLinesTable.ingredientId, id));
+
+  res.json(rows);
 });
 
 router.post("/ingredients/:id/price", requireAuth, async (req, res): Promise<void> => {

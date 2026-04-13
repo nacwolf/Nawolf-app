@@ -1,11 +1,12 @@
 import { useUser, useClerk } from "@clerk/react";
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  Package, 
-  TestTubes, 
+import {
+  LayoutDashboard,
+  Package,
+  TestTubes,
   LogOut,
-  ChevronDown
+  ChevronDown,
+  Activity,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { 
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -40,11 +41,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Sidebar>
           <SidebarHeader className="p-4">
             <div className="flex items-center gap-2 font-bold text-xl text-primary">
-              <div className="bg-primary text-primary-foreground w-8 h-8 rounded flex items-center justify-center">K</div>
+              <div className="bg-primary text-primary-foreground w-8 h-8 rounded flex items-center justify-center text-sm font-bold">K</div>
               <span>Kostr</span>
             </div>
           </SidebarHeader>
-          
+
           <SidebarContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -55,7 +56,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location.startsWith("/skus")}>
                   <Link href="/skus">
@@ -64,12 +65,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location.startsWith("/ingredients")}>
                   <Link href="/ingredients">
                     <TestTubes className="w-4 h-4" />
                     <span>Ingredients</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/activity"}>
+                  <Link href="/activity">
+                    <Activity className="w-4 h-4" />
+                    <span>Activity Feed</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
