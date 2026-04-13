@@ -301,6 +301,65 @@ router.post("/skus/:id/cost-lines", requireAuth, async (req, res): Promise<void>
   });
 });
 
+router.patch("/skus/:id/cost-lines/:costLineId", requireAuth, async (req, res): Promise<void> => {
+  const skuId = parseInt(req.params.id, 10);
+  const costLineId = parseInt(req.params.costLineId, 10);
+
+  if (isNaN(skuId) || isNaN(costLineId)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const { ingredientId, quantityPerUnit, notes } = req.body;
+  const qty = parseFloat(quantityPerUnit);
+  if (isNaN(qty) || qty <= 0) {
+    res.status(400).json({ error: "quantityPerUnit must be a positive number" });
+    return;
+  }
+
+  const updateData: Record<string, any> = {
+    quantityPerUnit: qty.toFixed(6),
+    notes: notes ?? null,
+  };
+  if (ingredientId != null && !isNaN(parseInt(ingredientId, 10))) {
+    updateData.ingredientId = parseInt(ingredientId, 10);
+  }
+
+  const [line] = await db
+    .update(costLinesTable)
+    .set(updateData)
+    .where(eq(costLinesTable.id, costLineId))
+    .returning();
+
+  if (!line) {
+    res.status(404).json({ error: "Cost line not found" });
+    return;
+  }
+
+  await snapshotSku(skuId, "cost_line_updated");
+
+  const [ingredient] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, line.ingredientId)).limit(1);
+  const [priceRow] = await db
+    .select({ price: ingredientPricesTable.price })
+    .from(ingredientPricesTable)
+    .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
+    .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
+    .limit(1);
+
+  const currentPrice = priceRow ? parseFloat(priceRow.price) : null;
+  const storedQty = parseFloat(line.quantityPerUnit);
+
+  res.json({
+    ...line,
+    ingredientName: ingredient?.name ?? "",
+    ingredientUnit: ingredient?.unit ?? "",
+    ingredientCategory: ingredient?.category ?? null,
+    quantityPerUnit: storedQty,
+    currentPrice,
+    lineCost: currentPrice != null ? currentPrice * storedQty : null,
+  });
+});
+
 router.delete("/skus/:id/cost-lines/:costLineId", requireAuth, async (req, res): Promise<void> => {
   const params = DeleteSkuCostLineParams.safeParse({ id: req.params.id, costLineId: req.params.costLineId });
   if (!params.success) {

@@ -1,24 +1,34 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useGetSku, useUpdateSku, useAddSkuCostLine, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, formatPercent, formatDate, formatDateShort } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Legend } from "recharts";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
+import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "wouter";
+import { getApiUrl } from "@/lib/queryClient";
+
+const CATEGORIES = [
+  "Raw Materials",
+  "Packaging",
+  "Labor",
+  "Overhead",
+  "Quality & Compliance",
+  "Delivery",
+] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Raw Materials": "#22c55e",
@@ -26,7 +36,34 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Labor": "#f97316",
   "Overhead": "#94a3b8",
   "Quality & Compliance": "#3b82f6",
-  "Delivery": "#92400e",
+  "Delivery": "#f59e0b",
+};
+
+const CATEGORY_BORDER: Record<string, string> = {
+  "Raw Materials": "border-l-green-500",
+  "Packaging": "border-l-purple-500",
+  "Labor": "border-l-orange-500",
+  "Overhead": "border-l-slate-400",
+  "Quality & Compliance": "border-l-blue-500",
+  "Delivery": "border-l-amber-500",
+};
+
+const CATEGORY_HEADER_BG: Record<string, string> = {
+  "Raw Materials": "bg-green-50",
+  "Packaging": "bg-purple-50",
+  "Labor": "bg-orange-50",
+  "Overhead": "bg-slate-50",
+  "Quality & Compliance": "bg-blue-50",
+  "Delivery": "bg-amber-50",
+};
+
+const CATEGORY_TEXT: Record<string, string> = {
+  "Raw Materials": "text-green-700",
+  "Packaging": "text-purple-700",
+  "Labor": "text-orange-700",
+  "Overhead": "text-slate-600",
+  "Quality & Compliance": "text-blue-700",
+  "Delivery": "text-amber-700",
 };
 
 const CATEGORY_BG: Record<string, string> = {
@@ -42,13 +79,22 @@ const editPriceSchema = z.object({
   sellPrice: z.coerce.number().min(0.01, "Price must be > 0"),
 });
 
-const addLineSchema = z.object({
-  ingredientId: z.coerce.number().min(1, "Required"),
-  quantityPerUnit: z.coerce.number().min(0.0001, "Required"),
-  notes: z.string().optional()
+const lineSchema = z.object({
+  ingredientId: z.coerce.number().min(1, "Select an ingredient"),
+  displayQty: z.coerce.number().min(0.000001, "Must be > 0"),
+  notes: z.string().optional(),
 });
 
 type TimePeriod = "3M" | "6M" | "12M" | "All";
+type DisplayUnit = "kg" | "g";
+
+interface EditingLine {
+  id: number;
+  ingredientId: number;
+  quantityPerUnit: number;
+  notes: string | null;
+  ingredientUnit: string;
+}
 
 function triggerLabel(triggeredBy: string | null): { label: string; className: string } {
   if (!triggeredBy) return { label: "Unknown", className: "bg-gray-100 text-gray-700" };
@@ -59,11 +105,111 @@ function triggerLabel(triggeredBy: string | null): { label: string; className: s
   return { label: triggeredBy, className: "bg-gray-100 text-gray-700" };
 }
 
+function formatQty(qty: number, unit: string): string {
+  if (unit === "kg" && qty < 1) {
+    const g = qty * 1000;
+    return `${g % 1 === 0 ? g : g.toFixed(1)} g`;
+  }
+  const rounded = parseFloat(qty.toFixed(4));
+  return `${rounded} ${unit}`;
+}
+
+function initDisplayUnit(qty: number, unit: string): DisplayUnit {
+  return unit === "kg" && qty < 1 ? "g" : "kg";
+}
+
+function toDisplayQty(storedQty: number, unit: string, displayUnit: DisplayUnit): number {
+  if (unit === "kg" && displayUnit === "g") return parseFloat((storedQty * 1000).toFixed(4));
+  return storedQty;
+}
+
+function toStoredQty(displayQty: number, unit: string, displayUnit: DisplayUnit): number {
+  if (unit === "kg" && displayUnit === "g") return displayQty / 1000;
+  return displayQty;
+}
+
+interface IngredientPickerProps {
+  ingredients: any[];
+  selectedId: number;
+  onSelect: (ing: any) => void;
+}
+
+function IngredientPicker({ ingredients, selectedId, onSelect }: IngredientPickerProps) {
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return ingredients;
+    return ingredients.filter(i =>
+      i.name.toLowerCase().includes(q) ||
+      (i.supplier || "").toLowerCase().includes(q) ||
+      (i.category || "").toLowerCase().includes(q)
+    );
+  }, [ingredients, search]);
+
+  const grouped = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const cat of CATEGORIES) {
+      const items = filtered.filter((i: any) => i.category === cat);
+      if (items.length) map[cat] = items;
+    }
+    const other = filtered.filter((i: any) => !CATEGORIES.includes(i.category));
+    if (other.length) map["Other"] = other;
+    return map;
+  }, [filtered]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+        <Input
+          className="pl-8 h-9"
+          placeholder="Search ingredients..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          autoFocus={false}
+        />
+      </div>
+      <div className="h-56 overflow-y-auto border rounded-md">
+        {Object.entries(grouped).length === 0 ? (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">No results</div>
+        ) : Object.entries(grouped).map(([cat, items]) => (
+          <div key={cat}>
+            <div className="sticky top-0 z-10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted border-b">
+              {cat}
+            </div>
+            {items.map((ing: any) => (
+              <button
+                key={ing.id}
+                type="button"
+                onClick={() => onSelect(ing)}
+                className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-accent transition-colors ${selectedId === ing.id ? "bg-primary/8" : ""}`}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    {selectedId === ing.id && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
+                    <span className={`text-sm font-medium truncate ${selectedId === ing.id ? "text-primary" : ""}`}>{ing.name}</span>
+                  </div>
+                  {ing.supplier && (
+                    <div className="text-xs text-muted-foreground truncate pl-5">{ing.supplier}</div>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                  {ing.currentPrice != null ? formatCurrency(ing.currentPrice) : "—"}/{ing.unit}
+                </div>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SkuDetail({ id }: { id: string }) {
   const skuId = parseInt(id, 10);
   const qc = useQueryClient();
   const { toast } = useToast();
-  const bomRef = useRef<HTMLDivElement>(null);
 
   const { data: sku, isLoading } = useGetSku(skuId, { query: { enabled: !isNaN(skuId) } });
   const { data: ingredients } = useListIngredients();
@@ -75,29 +221,35 @@ export default function SkuDetail({ id }: { id: string }) {
   const [isEditPriceOpen, setIsEditPriceOpen] = useState(false);
   const [isAddLineOpen, setIsAddLineOpen] = useState(false);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("All");
+  const [editingLine, setEditingLine] = useState<EditingLine | null>(null);
+  const [addDisplayUnit, setAddDisplayUnit] = useState<DisplayUnit>("kg");
+  const [editDisplayUnit, setEditDisplayUnit] = useState<DisplayUnit>("kg");
+  const [isSavingLine, setIsSavingLine] = useState(false);
+
+  const ingMap = useMemo(() => {
+    if (!ingredients) return {} as Record<number, any>;
+    return Object.fromEntries(ingredients.map((i: any) => [i.id, i])) as Record<number, any>;
+  }, [ingredients]);
 
   const priceForm = useForm<z.infer<typeof editPriceSchema>>({
     resolver: zodResolver(editPriceSchema),
     values: { sellPrice: sku?.sellPrice || 0 }
   });
 
-  const addLineForm = useForm<z.infer<typeof addLineSchema>>({
-    resolver: zodResolver(addLineSchema),
-    defaultValues: { ingredientId: 0, quantityPerUnit: 1, notes: "" }
+  const addLineForm = useForm<z.infer<typeof lineSchema>>({
+    resolver: zodResolver(lineSchema),
+    defaultValues: { ingredientId: 0, displayQty: 1, notes: "" }
   });
 
-  const selectedIngredientId = addLineForm.watch("ingredientId");
-  const selectedIngredient = ingredients?.find(i => i.id === selectedIngredientId);
+  const editLineForm = useForm<z.infer<typeof lineSchema>>({
+    resolver: zodResolver(lineSchema),
+    defaultValues: { ingredientId: 0, displayQty: 1, notes: "" }
+  });
 
-  const groupedIngredients = useMemo(() => {
-    if (!ingredients) return {};
-    return ingredients.reduce((acc: Record<string, typeof ingredients>, ing) => {
-      const cat = ing.category || "Other";
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(ing);
-      return acc;
-    }, {});
-  }, [ingredients]);
+  const addIngId = addLineForm.watch("ingredientId");
+  const addIng = ingMap[addIngId];
+  const editIngId = editLineForm.watch("ingredientId");
+  const editIng = ingMap[editIngId];
 
   const snapshotData = useMemo(() => {
     const all = [...(sku?.snapshots || [])].reverse();
@@ -126,7 +278,9 @@ export default function SkuDetail({ id }: { id: string }) {
       const cat = (line as any).ingredientCategory || "Other";
       totals[cat] = (totals[cat] || 0) + (line.lineCost || 0);
     }
-    return Object.entries(totals).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    return Object.entries(totals)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
   }, [sku?.costLines]);
 
   const totalCategoryValue = categoryBreakdown.reduce((s, d) => s + d.value, 0);
@@ -162,15 +316,38 @@ export default function SkuDetail({ id }: { id: string }) {
     }
   }
 
-  async function onAddLineSubmit(data: z.infer<typeof addLineSchema>) {
+  async function onAddLineSubmit(data: z.infer<typeof lineSchema>) {
+    const storedQty = toStoredQty(data.displayQty, addIng?.unit ?? "kg", addDisplayUnit);
     try {
-      await addLine.mutateAsync({ id: skuId, data: { ...data, notes: data.notes || null } });
+      await addLine.mutateAsync({ id: skuId, data: { ingredientId: data.ingredientId, quantityPerUnit: storedQty, notes: data.notes || null } });
       setIsAddLineOpen(false);
       addLineForm.reset();
+      setAddDisplayUnit("kg");
       qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
       toast({ title: "Cost line added" });
     } catch {
       toast({ variant: "destructive", title: "Error adding cost line" });
+    }
+  }
+
+  async function onEditLineSubmit(data: z.infer<typeof lineSchema>) {
+    if (!editingLine) return;
+    const storedQty = toStoredQty(data.displayQty, editIng?.unit ?? editingLine.ingredientUnit, editDisplayUnit);
+    setIsSavingLine(true);
+    try {
+      const res = await fetch(getApiUrl(`/skus/${skuId}/cost-lines/${editingLine.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ingredientId: data.ingredientId, quantityPerUnit: storedQty, notes: data.notes || null }),
+      });
+      if (!res.ok) throw new Error();
+      setEditingLine(null);
+      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      toast({ title: "Cost line updated" });
+    } catch {
+      toast({ variant: "destructive", title: "Error updating cost line" });
+    } finally {
+      setIsSavingLine(false);
     }
   }
 
@@ -184,6 +361,35 @@ export default function SkuDetail({ id }: { id: string }) {
       toast({ variant: "destructive", title: "Error removing line" });
     }
   }
+
+  function openEditLine(line: any) {
+    const ingUnit = line.ingredientUnit ?? "kg";
+    const du = initDisplayUnit(line.quantityPerUnit, ingUnit);
+    const dq = toDisplayQty(line.quantityPerUnit, ingUnit, du);
+    setEditDisplayUnit(du);
+    setEditingLine({ id: line.id, ingredientId: line.ingredientId, quantityPerUnit: line.quantityPerUnit, notes: line.notes ?? null, ingredientUnit: ingUnit });
+    editLineForm.reset({ ingredientId: line.ingredientId, displayQty: dq, notes: line.notes ?? "" });
+  }
+
+  function openAddLineFromCategory() {
+    addLineForm.reset({ ingredientId: 0, displayQty: 1, notes: "" });
+    setAddDisplayUnit("kg");
+    setIsAddLineOpen(true);
+  }
+
+  const costLinesByCategory = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const cat of CATEGORIES) map[cat] = [];
+    for (const line of sku.costLines ?? []) {
+      const cat = (line as any).ingredientCategory || "Other";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(line);
+    }
+    return map;
+  }, [sku.costLines]);
+
+  const currentEditIngUnit = editIng?.unit ?? editingLine?.ingredientUnit ?? "kg";
+  const currentAddIngUnit = addIng?.unit ?? "kg";
 
   return (
     <div className="space-y-6">
@@ -306,13 +512,7 @@ export default function SkuDetail({ id }: { id: string }) {
                   <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis
-                      tickFormatter={(v) => `${v}%`}
-                      fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      domain={[0, "auto"]}
-                    />
+                    <YAxis tickFormatter={(v) => `${v}%`} fontSize={11} tickLine={false} axisLine={false} domain={[0, "auto"]} />
                     <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, "Margin"]} labelFormatter={(l) => l} />
                     <ReferenceLine y={25} stroke="#22c55e" strokeDasharray="4 4" label={{ value: "25%", position: "insideTopRight", fontSize: 10, fill: "#22c55e" }} />
                     <ReferenceLine y={10} stroke="#f97316" strokeDasharray="4 4" label={{ value: "10%", position: "insideTopRight", fontSize: 10, fill: "#f97316" }} />
@@ -403,113 +603,113 @@ export default function SkuDetail({ id }: { id: string }) {
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2" ref={bomRef}>
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="md:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
               <CardTitle className="text-base">Bill of Materials</CardTitle>
-              <CardDescription>Cost lines for this SKU</CardDescription>
+              <CardDescription>Cost lines per category</CardDescription>
             </div>
-            <Dialog open={isAddLineOpen} onOpenChange={setIsAddLineOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Add Cost Line</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Add Cost Line</DialogTitle></DialogHeader>
-                <Form {...addLineForm}>
-                  <form onSubmit={addLineForm.handleSubmit(onAddLineSubmit)} className="space-y-4">
-                    <FormField control={addLineForm.control} name="ingredientId" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ingredient / Cost Item</FormLabel>
-                        <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value ? field.value.toString() : ""}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {Object.entries(groupedIngredients).map(([cat, items]) => (
-                              <div key={cat}>
-                                <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide bg-muted">{cat}</div>
-                                {items.map(i => (
-                                  <SelectItem key={i.id} value={i.id.toString()}>
-                                    {i.name} ({formatCurrency(i.currentPrice)}/{i.unit})
-                                  </SelectItem>
-                                ))}
-                              </div>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={addLineForm.control} name="quantityPerUnit" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantity per unit {selectedIngredient ? `(${selectedIngredient.unit})` : ""}</FormLabel>
-                        <FormControl><Input type="number" step="0.0001" {...field} /></FormControl>
-                        {selectedIngredient?.category === "Labor" && (
-                          <FormDescription>Enter hours per unit — e.g. 0.083 = 5 minutes</FormDescription>
-                        )}
-                        {(selectedIngredient?.category === "Overhead" || selectedIngredient?.category === "Quality & Compliance" || selectedIngredient?.category === "Delivery") && (
-                          <FormDescription>Quantity is typically 1 (pre-calculated per-unit cost)</FormDescription>
-                        )}
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <FormField control={addLineForm.control} name="notes" render={({ field }) => (
-                      <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <DialogFooter>
-                      <Button type="button" variant="ghost" onClick={() => setIsAddLineOpen(false)}>Cancel</Button>
-                      <Button type="submit" disabled={addLine.isPending}>Add</Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button size="sm" onClick={openAddLineFromCategory}>
+              <Plus className="w-4 h-4 mr-1.5" /> Add Cost Line
+            </Button>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Unit Cost</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Line Cost</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sku.costLines?.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No cost lines. Add one above.</TableCell></TableRow>
-                ) : sku.costLines?.map(line => (
-                  <TableRow key={line.id}>
-                    <TableCell>
-                      <Link href={`/ingredients/${line.ingredientId}`} className="font-medium text-primary hover:underline">{line.ingredientName}</Link>
-                      {line.notes && <div className="text-xs text-muted-foreground">{line.notes}</div>}
-                    </TableCell>
-                    <TableCell>
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${CATEGORY_BG[(line as any).ingredientCategory] || "bg-gray-100 text-gray-700"}`}>
-                        {(line as any).ingredientCategory || "—"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">{formatCurrency(line.currentPrice)}/{line.ingredientUnit}</TableCell>
-                    <TableCell className="text-right">{line.quantityPerUnit}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(line.lineCost)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteLine(line.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              {sku.costLines && sku.costLines.length > 0 && (
-                <TableFooter>
-                  <TableRow>
-                    <TableCell colSpan={4} className="font-bold">Total COGS</TableCell>
-                    <TableCell className="text-right font-bold text-lg">{formatCurrency(sku.totalCogs)}</TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableFooter>
-              )}
-            </Table>
+
+          <CardContent className="p-0 pb-1">
+            {CATEGORIES.map(cat => {
+              const lines = costLinesByCategory[cat] ?? [];
+              const catTotal = lines.reduce((s: number, l: any) => s + (l.lineCost || 0), 0);
+              return (
+                <div key={cat} className={`border-l-4 ${CATEGORY_BORDER[cat]} border-b last:border-b-0`}>
+                  <div className={`px-4 py-2 flex items-center justify-between ${CATEGORY_HEADER_BG[cat]}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold uppercase tracking-wider ${CATEGORY_TEXT[cat]}`}>{cat}</span>
+                      {lines.length > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{lines.length}</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {lines.length > 0 && (
+                        <span className="text-xs font-medium text-muted-foreground">{formatCurrency(catTotal)}</span>
+                      )}
+                      <button
+                        onClick={openAddLineFromCategory}
+                        className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                      >
+                        <Plus className="w-3 h-3" /> Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {lines.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="pl-4 text-xs h-8 text-muted-foreground font-medium">Item</TableHead>
+                          <TableHead className="text-right text-xs h-8 text-muted-foreground font-medium">Unit Cost</TableHead>
+                          <TableHead className="text-right text-xs h-8 text-muted-foreground font-medium">Qty</TableHead>
+                          <TableHead className="text-right text-xs h-8 text-muted-foreground font-medium">Line Cost</TableHead>
+                          <TableHead className="w-16 h-8" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lines.map((line: any) => {
+                          const ing = ingMap[line.ingredientId];
+                          return (
+                            <TableRow key={line.id} className="group">
+                              <TableCell className="pl-4 py-2">
+                                <div className="text-sm font-medium">{line.ingredientName}</div>
+                                {ing?.supplier && (
+                                  <div className="text-xs text-muted-foreground">{ing.supplier}</div>
+                                )}
+                                {line.notes && (
+                                  <div className="text-xs text-muted-foreground italic">{line.notes}</div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-muted-foreground py-2">
+                                {formatCurrency(line.currentPrice)}/{line.ingredientUnit}
+                              </TableCell>
+                              <TableCell className="text-right text-sm py-2">
+                                {formatQty(line.quantityPerUnit, line.ingredientUnit)}
+                              </TableCell>
+                              <TableCell className="text-right text-sm font-medium py-2">
+                                {formatCurrency(line.lineCost)}
+                              </TableCell>
+                              <TableCell className="py-2 pr-3">
+                                <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => openEditLine(line)}
+                                    className="p-1 rounded hover:bg-muted transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteLine(line.id)}
+                                    className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                                    title="Remove"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                  </button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="px-4 py-2.5 text-xs text-muted-foreground italic">No items in this category</div>
+                  )}
+                </div>
+              );
+            })}
+
+            {(sku.costLines?.length ?? 0) > 0 && (
+              <div className="px-4 py-3 flex items-center justify-between bg-muted/40 border-t mt-0">
+                <span className="text-sm font-bold">Total COGS</span>
+                <span className="text-lg font-bold">{formatCurrency(sku.totalCogs)}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -565,6 +765,161 @@ export default function SkuDetail({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Add Cost Line Dialog ── */}
+      <Dialog open={isAddLineOpen} onOpenChange={(open) => { if (!open) { setIsAddLineOpen(false); addLineForm.reset(); setAddDisplayUnit("kg"); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add Cost Line</DialogTitle></DialogHeader>
+          <Form {...addLineForm}>
+            <form onSubmit={addLineForm.handleSubmit(onAddLineSubmit)} className="space-y-4">
+              <FormField control={addLineForm.control} name="ingredientId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ingredient / Cost Item</FormLabel>
+                  <IngredientPicker
+                    ingredients={ingredients ?? []}
+                    selectedId={field.value}
+                    onSelect={(ing) => {
+                      field.onChange(ing.id);
+                      const du = initDisplayUnit(1, ing.unit);
+                      setAddDisplayUnit(du);
+                      addLineForm.setValue("displayQty", 1);
+                    }}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={addLineForm.control} name="displayQty" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Quantity per unit</FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
+                    </FormControl>
+                    {currentAddIngUnit === "kg" && (
+                      <div className="flex border rounded-md overflow-hidden">
+                        {(["g", "kg"] as DisplayUnit[]).map(u => (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => {
+                              const current = parseFloat(String(field.value)) || 0;
+                              if (u === "g" && addDisplayUnit === "kg") {
+                                addLineForm.setValue("displayQty", parseFloat((current * 1000).toFixed(4)));
+                              } else if (u === "kg" && addDisplayUnit === "g") {
+                                addLineForm.setValue("displayQty", parseFloat((current / 1000).toFixed(6)));
+                              }
+                              setAddDisplayUnit(u);
+                            }}
+                            className={`px-3 py-2 text-sm font-medium transition-colors ${addDisplayUnit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {currentAddIngUnit !== "kg" && (
+                      <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentAddIngUnit || "unit"}</div>
+                    )}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={addLineForm.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                  <FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={() => { setIsAddLineOpen(false); addLineForm.reset(); }}>Cancel</Button>
+                <Button type="submit" disabled={addLine.isPending}>Add</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Cost Line Sheet ── */}
+      <Sheet open={!!editingLine} onOpenChange={(open) => { if (!open) setEditingLine(null); }}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle>Edit Cost Line</SheetTitle>
+          </SheetHeader>
+          <Form {...editLineForm}>
+            <form onSubmit={editLineForm.handleSubmit(onEditLineSubmit)} className="space-y-5">
+              <FormField control={editLineForm.control} name="ingredientId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ingredient / Cost Item</FormLabel>
+                  <IngredientPicker
+                    ingredients={ingredients ?? []}
+                    selectedId={field.value}
+                    onSelect={(ing) => {
+                      field.onChange(ing.id);
+                      const du = initDisplayUnit(parseFloat(String(editLineForm.getValues("displayQty"))) || 1, ing.unit);
+                      setEditDisplayUnit(du);
+                    }}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={editLineForm.control} name="displayQty" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Quantity per unit</FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
+                    </FormControl>
+                    {currentEditIngUnit === "kg" && (
+                      <div className="flex border rounded-md overflow-hidden">
+                        {(["g", "kg"] as DisplayUnit[]).map(u => (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => {
+                              const current = parseFloat(String(field.value)) || 0;
+                              if (u === "g" && editDisplayUnit === "kg") {
+                                editLineForm.setValue("displayQty", parseFloat((current * 1000).toFixed(4)));
+                              } else if (u === "kg" && editDisplayUnit === "g") {
+                                editLineForm.setValue("displayQty", parseFloat((current / 1000).toFixed(6)));
+                              }
+                              setEditDisplayUnit(u);
+                            }}
+                            className={`px-3 py-2 text-sm font-medium transition-colors ${editDisplayUnit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {currentEditIngUnit !== "kg" && (
+                      <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentEditIngUnit || "unit"}</div>
+                    )}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={editLineForm.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                  <FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <SheetFooter className="flex gap-2 pt-2">
+                <Button type="button" variant="ghost" className="flex-1" onClick={() => setEditingLine(null)}>Cancel</Button>
+                <Button type="submit" className="flex-1" disabled={isSavingLine}>Save Changes</Button>
+              </SheetFooter>
+            </form>
+          </Form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
