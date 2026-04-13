@@ -21,7 +21,7 @@ import { z } from "zod";
 import { Link } from "wouter";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "Raw Material": "#22c55e",
+  "Raw Materials": "#22c55e",
   "Packaging": "#a855f7",
   "Labor": "#f97316",
   "Overhead": "#94a3b8",
@@ -30,7 +30,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_BG: Record<string, string> = {
-  "Raw Material": "bg-green-100 text-green-800",
+  "Raw Materials": "bg-green-100 text-green-800",
   "Packaging": "bg-purple-100 text-purple-800",
   "Labor": "bg-orange-100 text-orange-800",
   "Overhead": "bg-slate-100 text-slate-700",

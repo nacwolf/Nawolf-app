@@ -136,6 +136,33 @@ router.get("/ingredients/:id/skus", requireAuth, async (req, res): Promise<void>
   res.json(rows);
 });
 
+router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ingredient id" });
+    return;
+  }
+
+  const { name, supplier } = req.body;
+  if (!name || typeof name !== "string" || !name.trim()) {
+    res.status(400).json({ error: "Name is required" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(ingredientsTable)
+    .set({ name: name.trim(), supplier: supplier?.trim() || null })
+    .where(eq(ingredientsTable.id, id))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Ingredient not found" });
+    return;
+  }
+
+  res.json(updated);
+});
+
 router.post("/ingredients/:id/price", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateIngredientPriceParams.safeParse({ id: req.params.id });
   if (!params.success) {

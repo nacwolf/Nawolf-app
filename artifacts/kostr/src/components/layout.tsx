@@ -69,7 +69,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <SidebarMenuButton asChild isActive={location.startsWith("/ingredients")}>
                   <Link href="/ingredients">
                     <TestTubes className="w-4 h-4" />
-                    <span>Ingredients</span>
+                    <span>Cost Elements</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -16,7 +16,7 @@ import { formatCurrency, formatPercent } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "Raw Material": "bg-green-100 text-green-800",
+  "Raw Materials": "bg-green-100 text-green-800",
   "Packaging": "bg-purple-100 text-purple-800",
   "Labor": "bg-orange-100 text-orange-800",
   "Overhead": "bg-slate-100 text-slate-700",
