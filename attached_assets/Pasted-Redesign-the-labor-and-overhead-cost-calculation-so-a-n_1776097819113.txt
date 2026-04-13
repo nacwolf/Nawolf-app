@@ -1,0 +1,168 @@
+Redesign the labor and overhead cost calculation so a non-financial 
+manager can set it up in under 5 minutes. The goal: set things up 
+once in the cost library, then each SKU just needs two inputs.
+
+────────────────────────────────────────────
+NEW DATABASE TABLES
+────────────────────────────────────────────
+
+CREATE TABLE team_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id UUID REFERENCES organisations(id),
+  name VARCHAR NOT NULL,              -- e.g. "Marco (owner)"
+  role_description VARCHAR,           -- e.g. "Production + packing"
+  hourly_wage DECIMAL(8,2) NOT NULL,
+  oncost_percent DECIMAL(5,2) DEFAULT 25,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+-- loaded_rate is always calculated: hourly_wage * (1 + oncost_percent/100)
+-- Never store loaded_rate — always compute it
+
+CREATE TABLE sku_production_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sku_id UUID REFERENCES skus(id) UNIQUE,
+  units_per_day INTEGER,              -- how many units produced in one full day
+  carton_size INTEGER DEFAULT 1,      -- if counting in cartons, units per carton
+  shift_hours DECIMAL(4,2) DEFAULT 8, -- length of production shift
+  team_member_ids UUID[],             -- array of team_member ids who work on this SKU
+  notes TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+────────────────────────────────────────────
+COST LIBRARY PAGE (/cost-library)
+────────────────────────────────────────────
+
+Replace the current ingredients page with a Cost Library page 
+that has three sections:
+
+SECTION 1 — Your team
+Table showing all team members:
+  Columns: Name/role, Hourly wage, Employer on-costs %, 
+           Loaded rate (auto-calculated, shown in green)
+
+"+ Add person" button opens a simple form:
+  - Name (text, e.g. "Marco", "Ana - baker")
+  - Hourly wage in €
+  - Employer on-costs % (default 25%, with tooltip: 
+    "National insurance, pension, and holiday pay on top 
+     of their wage. Use 25% if unsure.")
+  - Loaded rate shown live: "This person costs you €X.XX/hr"
+
+When a wage is updated, trigger recalculation of labor cost 
+for ALL skus that have this team member in their 
+sku_production_config.team_member_ids. This triggers the 
+snapshot cascade for all affected SKUs.
+
+SECTION 2 — Monthly overhead
+Simple list of cost items with a monthly amount.
+Pre-populate with common items:
+  Production rent / kitchen, Electricity, Gas/heating, 
+  Water, Equipment lease, Maintenance, Cleaning supplies,
+  Food safety certification, Insurance
+
+Below the list: "Total units produced per month (all SKUs)"
+input field.
+
+Overhead per unit = SUM(all monthly costs) / monthly_units
+Show this result prominently.
+
+"Save & apply" button updates the overhead ingredient_prices 
+record and triggers snapshot cascade for all SKUs.
+
+SECTION 3 — Delivery rates
+Simple table: delivery type name + cost per unit.
+e.g. "Local delivery €0.18" / "National delivery €0.35"
+
+────────────────────────────────────────────
+SKU PRODUCTION DETAILS
+────────────────────────────────────────────
+
+On the SKU detail or edit page, add a "Production setup" 
+section with exactly these inputs:
+
+1. WHO WORKS ON THIS PRODUCT
+   A checklist showing all active team_members.
+   Each row: checkbox, name, role, loaded rate shown small.
+   Manager just ticks the people involved.
+
+2. HOW MANY CAN YOU MAKE IN A DAY
+   Single number input: "Units produced per day"
+   Below it: optional "Counting in cartons?" toggle.
+   If yes: show "Units per carton" input.
+   Total daily units = units_per_day * carton_size.
+
+3. SHIFT LENGTH (optional, defaults to 8 hours)
+   Most managers will never change this. Show it collapsed 
+   under "Advanced" by default.
+
+That is ALL the manager needs to enter. 
+Do not show any formulas or intermediate values during setup.
+
+AFTER saving, show a summary result:
+  "Labor cost per unit: €X.XXXX"
+  Small expandable "How was this calculated?" that shows:
+  "[Names] × €X.XX/hr total × 8 hrs ÷ 240 units = €X.XXXX"
+
+────────────────────────────────────────────
+CALCULATION LOGIC (server-side)
+────────────────────────────────────────────
+
+Function: calculateLaborCostPerUnit(sku_id)
+  1. Fetch sku_production_config for this sku_id
+  2. If units_per_day is null or team_member_ids is empty, 
+     return null (not yet configured)
+  3. Fetch all team_members WHERE id IN team_member_ids
+  4. total_loaded_rate = SUM(member.hourly_wage * 
+     (1 + member.oncost_percent/100))
+  5. total_day_units = units_per_day * carton_size
+  6. labor_per_unit = (total_loaded_rate * shift_hours) 
+     / total_day_units
+  7. Return labor_per_unit
+
+This function should be called:
+  - When sku_production_config is saved/updated
+  - When any team_member wage or oncost is updated
+  - The result feeds into COGS calculation as the 
+    "Labor" cost line for that SKU
+
+────────────────────────────────────────────
+AUTO-RECALCULATION TRIGGERS
+────────────────────────────────────────────
+
+When a team_member wage changes:
+  1. Find all sku_production_configs that include this 
+     team_member_id in their team_member_ids array
+  2. For each: recalculate labor_per_unit
+  3. Update the Labor ingredient_prices row for each SKU
+  4. Trigger the normal snapshot cascade (write 
+     sku_snapshots row for each affected SKU)
+  5. Show a confirmation: "Ana's wage update affected 
+     4 SKUs. All margins recalculated."
+
+When overhead per unit changes:
+  1. Update the Overhead ingredient_prices for all SKUs
+  2. Trigger snapshot cascade for all SKUs
+
+────────────────────────────────────────────
+UI LANGUAGE RULES — important
+────────────────────────────────────────────
+
+Never show the words "loaded rate", "oncost", "decimal hours", 
+or "cost per unit" in labels visible to the manager.
+
+Instead use:
+  - "What this person costs you per hour" 
+    (not "loaded hourly rate")
+  - "Employer charges on top of wages" 
+    (not "employer on-costs")
+  - "Units you can make in a full day" 
+    (not "daily production capacity")
+  - "Team members on this product" 
+    (not "labor allocation")
+
+All calculated results should show as: 
+  "Labor cost: €X.XX per unit"
+  Never as a formula or intermediate step unless the manager 
+  clicks "How was this calculated?"

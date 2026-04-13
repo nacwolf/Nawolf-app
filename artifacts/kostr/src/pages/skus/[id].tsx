@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { formatCurrency, formatPercent, formatDate, formatDateShort } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Legend } from "recharts";
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine, Legend } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -12,8 +12,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -225,6 +227,13 @@ export default function SkuDetail({ id }: { id: string }) {
   const [addDisplayUnit, setAddDisplayUnit] = useState<DisplayUnit>("kg");
   const [editDisplayUnit, setEditDisplayUnit] = useState<DisplayUnit>("kg");
   const [isSavingLine, setIsSavingLine] = useState(false);
+  const [isSavingProd, setIsSavingProd] = useState(false);
+  const [prodUnitsPerDay, setProdUnitsPerDay] = useState<string>("");
+  const [prodCartonSize, setProdCartonSize] = useState<string>("1");
+  const [prodShiftHours, setProdShiftHours] = useState<string>("8");
+  const [prodMemberIds, setProdMemberIds] = useState<number[]>([]);
+  const [prodSectionOpen, setProdSectionOpen] = useState(false);
+  const [prodInitialized, setProdInitialized] = useState(false);
 
   const ingMap = useMemo(() => {
     if (!ingredients) return {} as Record<number, any>;
@@ -250,6 +259,71 @@ export default function SkuDetail({ id }: { id: string }) {
   const addIng = ingMap[addIngId];
   const editIngId = editLineForm.watch("ingredientId");
   const editIng = ingMap[editIngId];
+
+  const { data: teamMembers } = useQuery({
+    queryKey: ["team-members"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/team-members"));
+      return r.json() as Promise<{ id: number; name: string; roleDescription: string | null; hourlyWage: number; oncostPercent: number; loadedRate: number; isActive: boolean }[]>;
+    },
+  });
+
+  const { data: prodConfig, refetch: refetchProdConfig } = useQuery({
+    queryKey: ["production-config", skuId],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl(`/skus/${skuId}/production-config`));
+      return r.json() as Promise<{ config: any; teamMemberIds: number[]; laborCostPerUnit: number | null; explanation: string | null }>;
+    },
+    enabled: !isNaN(skuId),
+  });
+
+  useMemo(() => {
+    if (!prodInitialized && prodConfig) {
+      setProdInitialized(true);
+      setProdMemberIds(prodConfig.teamMemberIds ?? []);
+      if (prodConfig.config) {
+        setProdUnitsPerDay(String(prodConfig.config.unitsPerDay ?? ""));
+        setProdCartonSize(String(prodConfig.config.cartonSize ?? "1"));
+        setProdShiftHours(String(prodConfig.config.shiftHours ?? "8"));
+      }
+    }
+  }, [prodConfig, prodInitialized]);
+
+  const hasLaborSetup = (prodConfig?.laborCostPerUnit ?? null) !== null;
+
+  async function handleSaveProdConfig() {
+    setIsSavingProd(true);
+    try {
+      await fetch(getApiUrl(`/skus/${skuId}/production-config`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unitsPerDay: parseInt(prodUnitsPerDay) || null,
+          cartonSize: parseInt(prodCartonSize) || 1,
+          shiftHours: parseFloat(prodShiftHours) || 8,
+          teamMemberIds: prodMemberIds,
+        }),
+      });
+      await refetchProdConfig();
+      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      toast({ title: "Production setup saved — COGS updated" });
+    } catch {
+      toast({ variant: "destructive", title: "Error saving production setup" });
+    } finally {
+      setIsSavingProd(false);
+    }
+  }
+
+  const previewLaborCost = useMemo(() => {
+    const upd = parseInt(prodUnitsPerDay) || 0;
+    const cs = parseInt(prodCartonSize) || 1;
+    const sh = parseFloat(prodShiftHours) || 8;
+    const totalUnits = upd * cs;
+    if (!teamMembers || prodMemberIds.length === 0 || totalUnits === 0) return null;
+    const selected = teamMembers.filter(m => prodMemberIds.includes(m.id));
+    const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
+    return (totalRate * sh) / totalUnits;
+  }, [teamMembers, prodMemberIds, prodUnitsPerDay, prodCartonSize, prodShiftHours]);
 
   const snapshotData = useMemo(() => {
     const all = [...(sku?.snapshots || [])].reverse();
@@ -513,7 +587,7 @@ export default function SkuDetail({ id }: { id: string }) {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(v) => `${v}%`} fontSize={11} tickLine={false} axisLine={false} domain={[0, "auto"]} />
-                    <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, "Margin"]} labelFormatter={(l) => l} />
+                    <RechartsTooltip formatter={(v: number) => [`${v.toFixed(1)}%`, "Margin"]} labelFormatter={(l) => l} />
                     <ReferenceLine y={25} stroke="#22c55e" strokeDasharray="4 4" label={{ value: "25%", position: "insideTopRight", fontSize: 10, fill: "#22c55e" }} />
                     <ReferenceLine y={10} stroke="#f97316" strokeDasharray="4 4" label={{ value: "10%", position: "insideTopRight", fontSize: 10, fill: "#f97316" }} />
                     <Line type="monotone" dataKey="marginPct" name="Margin %" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
@@ -548,7 +622,7 @@ export default function SkuDetail({ id }: { id: string }) {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis tickFormatter={(v) => `€${v.toFixed(2)}`} fontSize={11} tickLine={false} axisLine={false} />
-                    <Tooltip formatter={(v: number) => [formatCurrency(v)]} />
+                    <RechartsTooltip formatter={(v: number) => [formatCurrency(v)]} />
                     <Area type="monotone" dataKey="sellPrice" name="Sell Price" stroke="hsl(var(--primary))" fill="url(#gradMarginBand)" strokeWidth={2} />
                     <Area type="monotone" dataKey="cogs" name="COGS" stroke="#ef4444" fill="url(#gradCogs)" strokeWidth={2} />
                     <Legend />
@@ -578,7 +652,7 @@ export default function SkuDetail({ id }: { id: string }) {
                           <Cell key={index} fill={CATEGORY_COLORS[entry.name] || "#94a3b8"} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number) => [formatCurrency(v)]} />
+                      <RechartsTooltip formatter={(v: number) => [formatCurrency(v)]} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -713,6 +787,156 @@ export default function SkuDetail({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Production Setup ── */}
+      <TooltipProvider>
+      <Card className="border-l-4 border-l-orange-500">
+        <button
+          className="w-full px-6 py-4 bg-orange-50 flex items-center justify-between gap-3 rounded-t-xl"
+          onClick={() => setProdSectionOpen(o => !o)}
+        >
+          <div className="flex items-center gap-3">
+            <Users className="w-4 h-4 text-orange-600 flex-shrink-0" />
+            <div className="text-left">
+              <div className="text-sm font-bold uppercase tracking-wider text-orange-700">Production Setup</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {hasLaborSetup
+                  ? `Labor cost: ${formatCurrency(prodConfig?.laborCostPerUnit ?? null)}/unit`
+                  : "Set up team members to calculate labor cost"}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasLaborSetup && (
+              <Badge className="bg-orange-100 text-orange-800 border-0 text-xs">
+                {formatCurrency(prodConfig?.laborCostPerUnit ?? null)}/unit
+              </Badge>
+            )}
+            {prodSectionOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {prodSectionOpen && (
+          <CardContent className="pt-5 space-y-5">
+            {/* Team Members */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm font-semibold">Who works on this product?</span>
+                <Tooltip>
+                  <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                  <TooltipContent className="max-w-60 text-xs">Select everyone who touches this product during production. Their loaded hourly rates will be added together.</TooltipContent>
+                </Tooltip>
+              </div>
+              {(teamMembers?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">No team members yet. Add them in the <Link href="/ingredients" className="text-primary hover:underline">Cost Library</Link>.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {teamMembers?.filter(m => m.isActive).map(m => (
+                    <label key={m.id} className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${prodMemberIds.includes(m.id) ? "border-orange-300 bg-orange-50" : ""}`}>
+                      <Checkbox
+                        checked={prodMemberIds.includes(m.id)}
+                        onCheckedChange={(checked) => {
+                          setProdMemberIds(prev => checked ? [...prev, m.id] : prev.filter(id => id !== m.id));
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium truncate">{m.name}</div>
+                        {m.roleDescription && <div className="text-xs text-muted-foreground truncate">{m.roleDescription}</div>}
+                      </div>
+                      <div className="text-xs text-orange-700 font-medium flex-shrink-0">{formatCurrency(m.loadedRate)}/hr</div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quantity */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                  Units made per day
+                  <Tooltip>
+                    <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                    <TooltipContent className="text-xs max-w-52">How many individual units (cartons, bags, jars…) your team makes in one shift for this product.</TooltipContent>
+                  </Tooltip>
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 200"
+                  value={prodUnitsPerDay}
+                  onChange={e => setProdUnitsPerDay(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                  Units per carton
+                  <Tooltip>
+                    <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                    <TooltipContent className="text-xs max-w-52">If you sell in cartons of 12, set this to 12. Leave as 1 if you sell individual units.</TooltipContent>
+                  </Tooltip>
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={prodCartonSize}
+                  onChange={e => setProdCartonSize(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                  Shift hours
+                  <Tooltip>
+                    <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                    <TooltipContent className="text-xs max-w-52">How many hours the team works on this product in one production run.</TooltipContent>
+                  </Tooltip>
+                </label>
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={prodShiftHours}
+                  onChange={e => setProdShiftHours(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
+
+            {/* Live preview */}
+            {previewLaborCost !== null && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Labor cost per unit</div>
+                    <div className="text-2xl font-bold text-orange-700 mt-0.5">{formatCurrency(previewLaborCost)}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right">
+                    {(() => {
+                      const selected = teamMembers?.filter(m => prodMemberIds.includes(m.id)) ?? [];
+                      const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
+                      const totalUnits = (parseInt(prodUnitsPerDay) || 0) * (parseInt(prodCartonSize) || 1);
+                      return `€${totalRate.toFixed(2)}/hr × ${parseFloat(prodShiftHours) || 8} hrs ÷ ${totalUnits} units`;
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-1 border-t">
+              {prodConfig?.explanation && !previewLaborCost && (
+                <span className="text-xs text-muted-foreground flex-1 italic">{prodConfig.explanation}</span>
+              )}
+              <Button onClick={handleSaveProdConfig} disabled={isSavingProd} size="sm">
+                {isSavingProd ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                Save &amp; apply
+              </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+      </TooltipProvider>
 
       <Card>
         <CardHeader>
