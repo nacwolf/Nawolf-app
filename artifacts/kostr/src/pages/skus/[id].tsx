@@ -285,6 +285,17 @@ export default function SkuDetail({ id }: { id: string }) {
 
   const totalCategoryValue = categoryBreakdown.reduce((s, d) => s + d.value, 0);
 
+  const costLinesByCategory = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const cat of CATEGORIES) map[cat] = [];
+    for (const line of sku?.costLines ?? []) {
+      const cat = (line as any).ingredientCategory || "Other";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(line);
+    }
+    return map;
+  }, [sku?.costLines]);
+
   const eventLog = useMemo(() => {
     const snaps = [...(sku?.snapshots || [])];
     return snaps.map((s, idx) => {
@@ -376,17 +387,6 @@ export default function SkuDetail({ id }: { id: string }) {
     setAddDisplayUnit("kg");
     setIsAddLineOpen(true);
   }
-
-  const costLinesByCategory = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    for (const cat of CATEGORIES) map[cat] = [];
-    for (const line of sku.costLines ?? []) {
-      const cat = (line as any).ingredientCategory || "Other";
-      if (!map[cat]) map[cat] = [];
-      map[cat].push(line);
-    }
-    return map;
-  }, [sku.costLines]);
 
   const currentEditIngUnit = editIng?.unit ?? editingLine?.ingredientUnit ?? "kg";
   const currentAddIngUnit = addIng?.unit ?? "kg";
