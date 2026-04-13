@@ -27,7 +27,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarRail,
 } from "@/components/ui/sidebar";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -38,7 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
-        <Sidebar>
+        <Sidebar collapsible="none">
           <SidebarHeader className="p-4">
             <div className="flex items-center gap-2 font-bold text-xl text-primary">
               <div className="bg-primary text-primary-foreground w-8 h-8 rounded flex items-center justify-center text-sm font-bold">K</div>
@@ -111,7 +110,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarFooter>
-          <SidebarRail />
         </Sidebar>
 
         <main className="flex-1 overflow-auto flex flex-col">
