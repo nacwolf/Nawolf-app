@@ -142,7 +142,7 @@ export default function CostLibrary() {
   const [isSavingOverhead, setIsSavingOverhead] = useState(false);
 
   const overheadWatchedTotal = useMemo(() => {
-    if (!overheadData) return null;
+    if (!overheadData?.items || !Array.isArray(overheadData.items)) return null;
     let total = 0;
     for (const item of overheadData.items) {
       const edited = overheadEdits[item.id];
@@ -358,7 +358,7 @@ export default function CostLibrary() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {overheadData?.items.map(item => (
+                    {overheadData?.items?.map(item => (
                       <TableRow key={item.id}>
                         <TableCell className="pl-6 text-sm">{item.name}</TableCell>
                         <TableCell className="pr-6">
