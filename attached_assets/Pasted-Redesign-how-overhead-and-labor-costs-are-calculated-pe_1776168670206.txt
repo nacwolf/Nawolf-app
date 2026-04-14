@@ -1,0 +1,237 @@
+Redesign how overhead and labor costs are calculated per SKU.
+Both use per-SKU production details entered on the SKU page.
+No global monthly units figure anywhere.
+
+────────────────────────────────────────────
+DATABASE CHANGES
+────────────────────────────────────────────
+
+Add these columns to production_config_history
+(and sku_production_config if it exists):
+
+  production_days_per_month INTEGER NOT NULL DEFAULT 20
+  -- How many days per month this SKU is produced.
+
+Remove the column monthly_units from overhead_configs.
+
+Add one column to overhead_configs (organisation-level):
+
+  operating_days_per_year INTEGER NOT NULL DEFAULT 250
+  -- How many days per year the factory actually runs.
+  -- Typically 250 (5 days/week, 50 weeks).
+  -- Used to convert annual fixed costs to a daily/monthly rate
+  -- and to sense-check per-SKU production days.
+
+New table if not exists:
+  production_config_history columns needed:
+    id, org_id, sku_id, effective_date,
+    units_per_day, carton_size, shift_hours,
+    production_days_per_month,
+    team_member_ids,
+    labor_per_unit,       -- calculated, stored
+    overhead_per_unit,    -- calculated, stored
+    total_day_cost,
+    change_reason, change_note,
+    created_by, created_at
+
+────────────────────────────────────────────
+OVERHEAD SETTINGS PAGE — factory operating days
+────────────────────────────────────────────
+
+Add ONE new field at the top of the overhead settings page,
+before the cost items list:
+
+  Label: "How many days per year does your factory operate?"
+  Input: number, default 250, range 1–365
+  Hint: "Count only actual production days — exclude
+         weekends, public holidays, and planned shutdowns.
+         Most food factories run 220–260 days per year.
+         e.g. 250 = 5 days/week, 50 working weeks
+              220 = 5 days/week with longer holidays
+              300 = includes some Saturdays"
+
+Show a read-only confirmation below:
+  "That is ~X days per month on average
+   (X days/year ÷ 12 months)"
+  Calculated as: operating_days_per_year / 12, rounded to 1dp.
+
+This single number is used in two ways:
+  1. To convert annual fixed costs (like annual
+     certification fees) to a monthly equivalent
+  2. To validate per-SKU production days —
+     a SKU cannot be produced more days per month
+     than the factory operates
+
+────────────────────────────────────────────
+SKU PRODUCTION SETUP — inputs on the SKU page
+────────────────────────────────────────────
+
+On the SKU detail/edit page, inside the "Production setup"
+section, show exactly these fields in this order:
+
+1. WHO WORKS ON THIS PRODUCT
+   Checklist of all active team_members from cost library.
+   Each row: checkbox, name, role description, loaded rate.
+   Manager ticks the people involved.
+
+2. HOW MANY CAN YOU MAKE IN A FULL PRODUCTION DAY
+   Label: "Units made per production day"
+   Input: number
+   Hint: "How many finished units come off the line in one
+          full day of making this product?
+          e.g. 120 loaves, 80 packs, 200 pieces"
+
+   Optional toggle: "Counting in cartons?"
+   If yes: show "Units per carton" input.
+   Total units = units_per_day * carton_size.
+
+3. HOW MANY DAYS PER MONTH DO YOU MAKE THIS PRODUCT
+   Label: "Production days per month"
+   Input: number, default 20, range 1–31
+   Hint: "How many days in a typical month do you run a
+          full production day for this product?
+          e.g. 20 = most weekdays,
+                5 = roughly once a week,
+                2 = made occasionally"
+
+   Validation: if production_days_per_month >
+   (operating_days_per_year / 12), show a warning:
+   "This is more than your factory's average operating
+    days per month (X days). Check your factory
+    operating days in overhead settings."
+
+4. SHIFT LENGTH
+   Label: "Hours in a production shift"
+   Input: number, default 8, step 0.5
+   Show collapsed under "Advanced" by default.
+
+LIVE CONFIRMATION shown below all inputs, read-only,
+updates as manager types:
+
+  "Monthly production: ~2,400 units (120/day × 20 days)"
+  "Annual production:  ~28,800 units (120/day × 240 days/yr)"
+  "Labor cost per unit: €0.682"
+  "Overhead cost per unit: €0.869"
+  "Combined: €1.551 per unit before ingredients"
+
+Annual production = units_per_day * carton_size
+                    * production_days_per_month * 12
+Show it because it gives the manager a meaningful
+number to sanity-check against actual output.
+
+────────────────────────────────────────────
+CALCULATION LOGIC — server side
+────────────────────────────────────────────
+
+Run this every time production setup is saved for a SKU:
+
+  -- Step 1: Labor per unit (unchanged)
+  total_loaded_rate = SUM(
+    member.hourly_wage * (1 + member.oncost_percent / 100)
+    FOR EACH member_id IN team_member_ids
+  )
+  total_day_units   = units_per_day * carton_size
+  labor_per_unit    = (total_loaded_rate * shift_hours)
+                      / total_day_units
+  total_day_cost    = total_loaded_rate * shift_hours
+
+  -- Step 2: Overhead per unit
+  -- Uses per-SKU monthly volume, not a global figure
+  total_monthly_fixed   = SUM(all overhead cost items)
+  sku_monthly_units     = units_per_day
+                          * carton_size
+                          * production_days_per_month
+  overhead_per_unit     = total_monthly_fixed
+                          / sku_monthly_units
+
+  NOTE: total_monthly_fixed is already stored as monthly
+  amounts in overhead cost items. If any cost item was
+  entered as an annual amount (e.g. annual certification
+  fee), convert it:
+    monthly_amount = annual_amount / (operating_days_per_year / 12 / (operating_days_per_year / 12))
+  Simplest approach: store all overhead items as monthly.
+  Add a field on each overhead cost item:
+    frequency: 'monthly' | 'annual'
+  If annual: monthly_equivalent = amount / 12
+  Always use monthly_equivalent in the overhead pool total.
+
+  -- Step 3: Store everything
+  INSERT into production_config_history:
+    all input fields + labor_per_unit + overhead_per_unit
+    + change_reason + change_note
+
+  -- Step 4: Update ingredient prices
+  INSERT new ingredient_prices row for "Production Labor"
+    for this SKU: price = labor_per_unit,
+    effective_date = today,
+    reason = built from change_reason + change_note
+
+  INSERT new ingredient_prices row for "Overhead Allocation"
+    for this SKU: price = overhead_per_unit,
+    effective_date = today,
+    reason = "Overhead: €X,XXX/mo ÷ X,XXX units/mo
+              (X days/mo × X units/day)"
+
+  -- Step 5: Trigger snapshot cascade
+  Recalculate COGS for this SKU and write a new
+  sku_snapshots row as normal.
+
+────────────────────────────────────────────
+WHEN TO RECALCULATE AUTOMATICALLY
+────────────────────────────────────────────
+
+Recalculate labor + overhead for a specific SKU when:
+  - Any production setup field changes on that SKU
+    (units_per_day, shift_hours, team_member_ids,
+     carton_size, production_days_per_month)
+  - A team_member wage or oncost changes in cost library
+    → recalculate ALL SKUs that include that team member
+
+Recalculate overhead only (not labor) for ALL SKUs when:
+  - Any overhead cost item is added, updated, or removed
+  - operating_days_per_year is changed in overhead settings
+    (changing factory days changes monthly_equivalent of
+     any annual cost items, which changes the overhead pool)
+  → Loop through every SKU, recalculate overhead_per_unit,
+    insert new ingredient_prices row, trigger snapshot cascade
+
+Confirmations after bulk recalculation:
+  Overhead change: "Overhead update affected 6 SKUs.
+                   All margins recalculated."
+  Wage change:     "Ana's wage update affected 4 SKUs:
+                   Sourdough Loaf, Brioche Bun, Rye Crackers,
+                   Seeded Flatbread. All costs recalculated."
+  Factory days:    "Factory operating days updated to 240.
+                   Overhead recalculated for 6 SKUs."
+
+────────────────────────────────────────────
+CHANGE REASONS — shown on save
+────────────────────────────────────────────
+
+When saving an update to production setup, show these
+as selectable tiles. Manager must pick one:
+
+  'efficiency'   → "We can make more per day"
+                   "Better process, new equipment, more practice"
+
+  'staff_change' → "Team changed"
+                   "Someone joined, left, or changed their role"
+
+  'shift_change' → "Shift length changed"
+                   "Longer or shorter production day"
+
+  'wage_change'  → "Wages changed"
+                   "Pay rise or new rates"
+                   (also auto-selected when triggered by
+                    a wage change in the cost library)
+
+  'initial'      → Used automatically on first save only.
+                   Never shown as a manual option.
+
+After selecting a reason, show a free-text field:
+  Label: "Describe what changed (recommended)"
+  Placeholder: "e.g. Installed new dough roller — output
+                increased from 120 to 160 loaves per day"
+  Stored permanently, shown in production history timeline.
+
+─
