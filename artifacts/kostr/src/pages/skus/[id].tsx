@@ -987,7 +987,7 @@ export default function SkuDetail({ id }: { id: string }) {
             {(previewMonthlyUnits > 0 || previewLaborCost !== null) && (
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Live preview</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
                     <div className="text-xs text-muted-foreground">Monthly units</div>
                     <div className="text-base font-bold text-foreground">{previewMonthlyUnits > 0 ? previewMonthlyUnits.toLocaleString() : "—"}</div>
@@ -996,9 +996,14 @@ export default function SkuDetail({ id }: { id: string }) {
                     <div className="text-xs text-muted-foreground">Annual units</div>
                     <div className="text-base font-bold text-foreground">{previewMonthlyUnits > 0 ? (previewMonthlyUnits * 12).toLocaleString() : "—"}</div>
                   </div>
-                  <div>
+                  <div className="sm:col-start-1">
                     <div className="text-xs text-muted-foreground">Labor / unit</div>
                     <div className="text-base font-bold text-orange-700">{previewLaborCost !== null ? formatCurrency(previewLaborCost) : "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Overhead / unit</div>
+                    <div className="text-base font-bold text-slate-600">{prodConfig?.config?.overheadCostPerUnit != null ? formatCurrency(prodConfig.config.overheadCostPerUnit) : "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">from saved config</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Combined pre-ingredient</div>
