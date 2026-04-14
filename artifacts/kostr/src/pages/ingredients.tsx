@@ -75,7 +75,7 @@ const teamMemberSchema = z.object({
 });
 
 interface TeamMember { id: number; name: string; roleDescription: string | null; hourlyWage: number; oncostPercent: number; loadedRate: number; isActive: boolean; }
-interface OverheadItem { id: number; name: string; monthlyAmount: number; sortOrder: number; isActive: boolean; }
+interface OverheadItem { id: number; name: string; monthlyAmount: number; frequency: string; sortOrder: number; isActive: boolean; }
 
 export default function CostLibrary() {
   const { toast } = useToast();
@@ -133,26 +133,29 @@ export default function CostLibrary() {
     queryKey: ["overhead"],
     queryFn: async () => {
       const r = await fetch(getApiUrl("/overhead"));
-      return r.json() as Promise<{ items: OverheadItem[]; totalUnitsPerMonth: number | null; totalMonthly: number; overheadPerUnit: number | null }>;
+      return r.json() as Promise<{ items: OverheadItem[]; operatingDaysPerYear: number; daysPerMonth: number; totalMonthly: number }>;
     },
   });
 
   const [overheadEdits, setOverheadEdits] = useState<Record<number, string>>({});
-  const [totalUnitsInput, setTotalUnitsInput] = useState<string>("");
+  const [freqEdits, setFreqEdits] = useState<Record<number, string>>({});
+  const [operatingDaysInput, setOperatingDaysInput] = useState<string>("");
   const [isSavingOverhead, setIsSavingOverhead] = useState(false);
+
+  const operatingDaysDisplay = operatingDaysInput !== "" ? parseInt(operatingDaysInput) || 0 : (overheadData?.operatingDaysPerYear ?? 250);
+  const liveDaysPerMonth = parseFloat((operatingDaysDisplay / 12).toFixed(1));
 
   const overheadWatchedTotal = useMemo(() => {
     if (!overheadData?.items || !Array.isArray(overheadData.items)) return null;
     let total = 0;
     for (const item of overheadData.items) {
       const edited = overheadEdits[item.id];
-      total += parseFloat(edited ?? String(item.monthlyAmount)) || 0;
+      const freq = freqEdits[item.id] ?? item.frequency ?? "monthly";
+      const amount = parseFloat(edited ?? String(item.monthlyAmount)) || 0;
+      total += freq === "annual" ? amount / 12 : amount;
     }
     return total;
-  }, [overheadData, overheadEdits]);
-
-  const totalUnitsDisplay = totalUnitsInput !== "" ? parseInt(totalUnitsInput) || 0 : (overheadData?.totalUnitsPerMonth ?? 0);
-  const liveOverheadPerUnit = overheadWatchedTotal && totalUnitsDisplay > 0 ? overheadWatchedTotal / totalUnitsDisplay : null;
+  }, [overheadData, overheadEdits, freqEdits]);
 
   const watchedWage = teamMemberForm.watch("hourlyWage");
   const watchedOncost = teamMemberForm.watch("oncostPercent");
@@ -230,32 +233,53 @@ export default function CostLibrary() {
   async function handleApplyOverhead() {
     setIsSavingOverhead(true);
     try {
+      let totalAffected = 0;
+
       for (const [idStr, val] of Object.entries(overheadEdits)) {
-        await fetch(getApiUrl(`/overhead/items/${idStr}`), {
+        const freq = freqEdits[idStr] ?? undefined;
+        const r = await fetch(getApiUrl(`/overhead/items/${idStr}`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ monthlyAmount: parseFloat(val) }),
+          body: JSON.stringify({ monthlyAmount: parseFloat(val), ...(freq ? { frequency: freq } : {}) }),
         });
+        const result = await r.json();
+        totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
       }
-      if (totalUnitsInput !== "") {
-        await fetch(getApiUrl("/overhead/settings"), {
+
+      for (const [idStr, freq] of Object.entries(freqEdits)) {
+        if (overheadEdits[idStr]) continue;
+        const r = await fetch(getApiUrl(`/overhead/items/${idStr}`), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ totalUnitsPerMonth: parseInt(totalUnitsInput) }),
+          body: JSON.stringify({ frequency: freq }),
         });
+        const result = await r.json();
+        totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
       }
-      const r = await fetch(getApiUrl("/overhead/apply"), { method: "POST" });
-      const result = await r.json();
+
+      if (operatingDaysInput !== "") {
+        const r = await fetch(getApiUrl("/overhead/settings"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operatingDaysPerYear: parseInt(operatingDaysInput) }),
+        });
+        const result = await r.json();
+        totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
+      }
+
       setOverheadEdits({});
-      setTotalUnitsInput("");
+      setFreqEdits({});
+      setOperatingDaysInput("");
       qc.invalidateQueries({ queryKey: ["overhead"] });
-      qc.invalidateQueries({ queryKey: getListIngredientsQueryKey() });
+      qc.invalidateQueries({ queryKey: ["production-config"] });
       toast({
-        title: `Overhead applied — €${result.overheadPerUnit?.toFixed(4)}/unit`,
-        description: result.affectedSkuCount > 0 ? `${result.affectedSkuCount} SKU${result.affectedSkuCount > 1 ? "s" : ""} recalculated` : "No SKUs using overhead yet",
+        title: "Overhead saved",
+        description: totalAffected > 0
+          ? `${totalAffected} SKU${totalAffected > 1 ? "s" : ""} recalculated`
+          : "No SKUs with production setup yet",
       });
     } catch {
-      toast({ variant: "destructive", title: "Error applying overhead" });
+      toast({ variant: "destructive", title: "Error saving overhead" });
     } finally {
       setIsSavingOverhead(false);
     }
@@ -341,7 +365,7 @@ export default function CostLibrary() {
               <Calculator className="w-4 h-4 text-slate-500 flex-shrink-0" />
               <div>
                 <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-600">Monthly Overhead</CardTitle>
-                <CardDescription className="text-xs mt-0.5">Fixed costs shared across all products — divided by total units made</CardDescription>
+                <CardDescription className="text-xs mt-0.5">Fixed costs divided per SKU based on how many days each product is made</CardDescription>
               </div>
             </div>
           </div>
@@ -350,68 +374,102 @@ export default function CostLibrary() {
               <div className="p-6"><Skeleton className="h-40 w-full" /></div>
             ) : (
               <>
+                {/* Factory operating days */}
+                <div className="px-6 py-4 border-b bg-slate-50/60 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      How many days per year does your factory operate?
+                      <Tooltip>
+                        <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent className="max-w-60 text-xs">Used to calculate how many production days there are per month (÷ 12). Overhead is then divided by units-per-day × production-days to get a per-unit cost.</TooltipContent>
+                      </Tooltip>
+                    </label>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="365"
+                        className="w-28 h-9"
+                        value={operatingDaysInput !== "" ? operatingDaysInput : String(overheadData?.operatingDaysPerYear ?? 250)}
+                        onChange={e => setOperatingDaysInput(e.target.value)}
+                      />
+                      <span className="text-sm text-muted-foreground">days / year</span>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">≈ {liveDaysPerMonth} days / month</span>
+                    </div>
+                  </div>
+                  {overheadWatchedTotal !== null && overheadWatchedTotal > 0 && (
+                    <div className="bg-white border rounded-lg px-4 py-3 text-center flex-shrink-0">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Monthly pool total</div>
+                      <div className="text-xl font-bold text-slate-700 mt-0.5">{formatCurrency(overheadWatchedTotal)}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">overhead per month</div>
+                    </div>
+                  )}
+                </div>
+
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableHead className="pl-6 text-xs font-medium">Cost item</TableHead>
-                      <TableHead className="text-right text-xs font-medium w-44 pr-6">Monthly amount</TableHead>
+                      <TableHead className="text-xs font-medium w-28">Frequency</TableHead>
+                      <TableHead className="text-right text-xs font-medium w-48 pr-6">Amount</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {overheadData?.items?.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell className="pl-6 text-sm">{item.name}</TableCell>
-                        <TableCell className="pr-6">
-                          <div className="flex items-center justify-end gap-1">
-                            <span className="text-muted-foreground text-xs">€</span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              className="w-28 h-8 text-right text-sm"
-                              value={overheadEdits[item.id] ?? String(item.monthlyAmount)}
-                              onChange={e => setOverheadEdits(prev => ({ ...prev, [item.id]: e.target.value }))}
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {overheadData?.items?.map(item => {
+                      const currentFreq = freqEdits[item.id] ?? item.frequency ?? "monthly";
+                      const currentAmount = overheadEdits[item.id] ?? String(item.monthlyAmount);
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="pl-6 text-sm">{item.name}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setFreqEdits(prev => ({ ...prev, [item.id]: "monthly" }))}
+                                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${currentFreq === "monthly" ? "bg-slate-700 text-white border-slate-700" : "text-muted-foreground border-muted-foreground/30 hover:border-slate-400"}`}
+                              >
+                                Monthly
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFreqEdits(prev => ({ ...prev, [item.id]: "annual" }))}
+                                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${currentFreq === "annual" ? "bg-amber-600 text-white border-amber-600" : "text-muted-foreground border-muted-foreground/30 hover:border-amber-400"}`}
+                              >
+                                Annual
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="pr-6">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-muted-foreground text-xs">€</span>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                className="w-28 h-8 text-right text-sm"
+                                value={currentAmount}
+                                onChange={e => setOverheadEdits(prev => ({ ...prev, [item.id]: e.target.value }))}
+                              />
+                              {currentFreq === "annual" && (
+                                <span className="text-xs text-amber-600 whitespace-nowrap">
+                                  ≈ {formatCurrency((parseFloat(currentAmount) || 0) / 12)}/mo
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
 
-                <div className="px-6 py-4 bg-slate-50 border-t space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex-1">
-                      <label className="text-sm font-medium">Total units you make per month (all products)</label>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <Input
-                          type="number"
-                          className="w-36 h-9"
-                          placeholder={String(overheadData?.totalUnitsPerMonth ?? "")}
-                          value={totalUnitsInput}
-                          onChange={e => setTotalUnitsInput(e.target.value)}
-                        />
-                        <span className="text-sm text-muted-foreground">units / month</span>
-                      </div>
-                    </div>
-
-                    {liveOverheadPerUnit !== null && (
-                      <div className="bg-white border rounded-lg px-4 py-3 text-center">
-                        <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Overhead per unit</div>
-                        <div className="text-2xl font-bold text-slate-700 mt-0.5">{formatCurrency(liveOverheadPerUnit)}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          €{overheadWatchedTotal?.toFixed(0)} ÷ {totalUnitsDisplay.toLocaleString()} units
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-xs text-muted-foreground">Clicking "Save &amp; apply" updates the overhead cost and recalculates margins for all your SKUs.</p>
-                    <Button onClick={handleApplyOverhead} disabled={isSavingOverhead || !totalUnitsDisplay} size="sm" className="flex-shrink-0">
-                      {isSavingOverhead ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-                      Save &amp; apply
-                    </Button>
-                  </div>
+                <div className="px-6 py-4 bg-slate-50 border-t flex items-center justify-between gap-4">
+                  <p className="text-xs text-muted-foreground">
+                    "Save &amp; apply" recalculates overhead for every SKU that has a production setup.
+                  </p>
+                  <Button onClick={handleApplyOverhead} disabled={isSavingOverhead} size="sm" className="flex-shrink-0">
+                    {isSavingOverhead ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                    Save &amp; apply
+                  </Button>
                 </div>
               </>
             )}

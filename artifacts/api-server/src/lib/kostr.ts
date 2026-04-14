@@ -1,5 +1,5 @@
 import { db, ingredientsTable, ingredientPricesTable, skusTable, costLinesTable, skuSnapshotsTable } from "@workspace/db";
-import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable } from "@workspace/db";
+import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable, overheadItemsTable, appSettingsTable, productionConfigHistoryTable } from "@workspace/db";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -50,6 +50,37 @@ export async function calculateLaborCostPerUnit(skuId: number): Promise<number |
   return laborPerUnit;
 }
 
+export async function calculateOverheadPerUnit(skuId: number): Promise<number | null> {
+  const [config] = await db
+    .select()
+    .from(skuProductionConfigTable)
+    .where(eq(skuProductionConfigTable.skuId, skuId))
+    .limit(1);
+
+  if (!config || !config.unitsPerDay) return null;
+
+  const daysPerMonth = config.productionDaysPerMonth ?? 20;
+  const unitsPerMonth = config.unitsPerDay * (config.cartonSize ?? 1) * daysPerMonth;
+  if (unitsPerMonth === 0) return null;
+
+  const items = await db
+    .select()
+    .from(overheadItemsTable)
+    .where(eq(overheadItemsTable.isActive, true));
+
+  if (items.length === 0) return null;
+
+  const totalMonthly = items.reduce((sum, item) => {
+    const amount = parseFloat(item.monthlyAmount);
+    const freq = item.frequency ?? "monthly";
+    return sum + (freq === "annual" ? amount / 12 : amount);
+  }, 0);
+
+  if (totalMonthly === 0) return null;
+
+  return totalMonthly / unitsPerMonth;
+}
+
 export async function updateProductionConfigLabor(skuId: number): Promise<number | null> {
   const labor = await calculateLaborCostPerUnit(skuId);
   if (labor !== null) {
@@ -73,9 +104,16 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
     .from(costLinesTable)
     .where(eq(costLinesTable.skuId, skuId));
 
-  const laborCost = await calculateLaborCostPerUnit(skuId);
+  const [prodConfig] = await db
+    .select({ laborCostPerUnit: skuProductionConfigTable.laborCostPerUnit, overheadCostPerUnit: skuProductionConfigTable.overheadCostPerUnit })
+    .from(skuProductionConfigTable)
+    .where(eq(skuProductionConfigTable.skuId, skuId))
+    .limit(1);
 
-  if (costLines.length === 0 && laborCost === null) return { totalCogs: null, grossMargin: null };
+  const laborCost = prodConfig?.laborCostPerUnit ? parseFloat(prodConfig.laborCostPerUnit) : null;
+  const overheadCost = prodConfig?.overheadCostPerUnit ? parseFloat(prodConfig.overheadCostPerUnit) : null;
+
+  if (costLines.length === 0 && laborCost === null && overheadCost === null) return { totalCogs: null, grossMargin: null };
 
   let totalCogs = 0;
   for (const line of costLines) {
@@ -84,9 +122,8 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
     totalCogs += price * parseFloat(line.quantityPerUnit);
   }
 
-  if (laborCost !== null) {
-    totalCogs += laborCost;
-  }
+  if (laborCost !== null) totalCogs += laborCost;
+  if (overheadCost !== null) totalCogs += overheadCost;
 
   const sellPrice = parseFloat(sku[0].sellPrice);
   if (sellPrice === 0) return { totalCogs, grossMargin: null };
@@ -112,6 +149,101 @@ export async function snapshotSku(skuId: number, triggeredBy: string): Promise<v
     grossMargin: grossMargin.toFixed(6),
     triggeredBy,
   });
+}
+
+export async function saveProductionConfig(
+  skuId: number,
+  inputs: {
+    unitsPerDay: number | null;
+    cartonSize: number;
+    shiftHours: number;
+    productionDaysPerMonth: number;
+    teamMemberIds: number[];
+    notes?: string | null;
+  },
+  changeReason: string,
+  changeNote: string | null,
+  createdBy?: string
+): Promise<{ laborCostPerUnit: number | null; overheadCostPerUnit: number | null }> {
+  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, teamMemberIds, notes } = inputs;
+
+  const [existing] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
+
+  if (existing) {
+    await db.update(skuProductionConfigTable).set({
+      unitsPerDay,
+      cartonSize,
+      shiftHours: shiftHours.toFixed(2),
+      productionDaysPerMonth,
+      notes: notes || null,
+      updatedAt: new Date(),
+    }).where(eq(skuProductionConfigTable.skuId, skuId));
+  } else {
+    await db.insert(skuProductionConfigTable).values({
+      skuId,
+      unitsPerDay,
+      cartonSize,
+      shiftHours: shiftHours.toFixed(2),
+      productionDaysPerMonth,
+      notes: notes || null,
+    });
+  }
+
+  await db.delete(skuTeamMembersTable).where(eq(skuTeamMembersTable.skuId, skuId));
+  if (teamMemberIds.length > 0) {
+    await db.insert(skuTeamMembersTable).values(teamMemberIds.map(tid => ({ skuId, teamMemberId: tid })));
+  }
+
+  const laborCost = await calculateLaborCostPerUnit(skuId);
+  const overheadCost = await calculateOverheadPerUnit(skuId);
+
+  await db.update(skuProductionConfigTable).set({
+    laborCostPerUnit: laborCost !== null ? laborCost.toFixed(6) : null,
+    overheadCostPerUnit: overheadCost !== null ? overheadCost.toFixed(6) : null,
+    updatedAt: new Date(),
+  }).where(eq(skuProductionConfigTable.skuId, skuId));
+
+  const today = new Date().toISOString().split("T")[0];
+  const totalDayUnits = (unitsPerDay ?? 0) * cartonSize;
+  const totalDayCost = totalDayUnits > 0 && laborCost !== null
+    ? (laborCost * totalDayUnits).toFixed(4)
+    : null;
+
+  await db.insert(productionConfigHistoryTable).values({
+    skuId,
+    effectiveDate: today,
+    unitsPerDay,
+    cartonSize,
+    shiftHours: shiftHours.toFixed(2),
+    productionDaysPerMonth,
+    teamMemberIds: JSON.stringify(teamMemberIds),
+    laborPerUnit: laborCost !== null ? laborCost.toFixed(6) : null,
+    overheadPerUnit: overheadCost !== null ? overheadCost.toFixed(6) : null,
+    totalDayCost,
+    changeReason,
+    changeNote,
+    createdBy: createdBy || null,
+  });
+
+  await snapshotSku(skuId, "production_config_updated");
+
+  return { laborCostPerUnit: laborCost, overheadCostPerUnit: overheadCost };
+}
+
+export async function recalculateOverheadForAllSkus(triggeredBy: string): Promise<number> {
+  const configs = await db.select().from(skuProductionConfigTable);
+  let count = 0;
+  for (const config of configs) {
+    if (!config.unitsPerDay) continue;
+    const overheadCost = await calculateOverheadPerUnit(config.skuId);
+    await db.update(skuProductionConfigTable).set({
+      overheadCostPerUnit: overheadCost !== null ? overheadCost.toFixed(6) : null,
+      updatedAt: new Date(),
+    }).where(eq(skuProductionConfigTable.skuId, config.skuId));
+    await snapshotSku(config.skuId, triggeredBy);
+    count++;
+  }
+  return count;
 }
 
 export async function recalculateAllSkusUsingIngredient(ingredientId: number, triggeredBy: string): Promise<number> {
@@ -140,7 +272,13 @@ export async function recalculateAllSkusUsingTeamMember(teamMemberId: number, tr
   logger.info({ teamMemberId, skuIds, count: skuIds.length }, "Recalculating SKUs after team member wage update");
 
   for (const skuId of skuIds) {
-    await updateProductionConfigLabor(skuId);
+    const laborCost = await calculateLaborCostPerUnit(skuId);
+    if (laborCost !== null) {
+      await db.update(skuProductionConfigTable).set({
+        laborCostPerUnit: laborCost.toFixed(6),
+        updatedAt: new Date(),
+      }).where(eq(skuProductionConfigTable.skuId, skuId));
+    }
     await snapshotSku(skuId, triggeredBy);
   }
 

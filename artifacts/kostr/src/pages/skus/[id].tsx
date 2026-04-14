@@ -231,9 +231,14 @@ export default function SkuDetail({ id }: { id: string }) {
   const [prodUnitsPerDay, setProdUnitsPerDay] = useState<string>("");
   const [prodCartonSize, setProdCartonSize] = useState<string>("1");
   const [prodShiftHours, setProdShiftHours] = useState<string>("8");
+  const [prodDaysPerMonth, setProdDaysPerMonth] = useState<string>("20");
   const [prodMemberIds, setProdMemberIds] = useState<number[]>([]);
   const [prodSectionOpen, setProdSectionOpen] = useState(false);
   const [prodInitialized, setProdInitialized] = useState(false);
+  const [prodDirty, setProdDirty] = useState(false);
+  const [changeReason, setChangeReason] = useState<string>("");
+  const [changeNote, setChangeNote] = useState<string>("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const ingMap = useMemo(() => {
     if (!ingredients) return {} as Record<number, any>;
@@ -272,7 +277,12 @@ export default function SkuDetail({ id }: { id: string }) {
     queryKey: ["production-config", skuId],
     queryFn: async () => {
       const r = await fetch(getApiUrl(`/skus/${skuId}/production-config`));
-      return r.json() as Promise<{ config: any; teamMemberIds: number[]; laborCostPerUnit: number | null; explanation: string | null }>;
+      return r.json() as Promise<{
+        config: any;
+        teamMemberIds: number[];
+        operatingDaysPerYear: number;
+        daysPerMonth: number;
+      }>;
     },
     enabled: !isNaN(skuId),
   });
@@ -285,15 +295,24 @@ export default function SkuDetail({ id }: { id: string }) {
         setProdUnitsPerDay(String(prodConfig.config.unitsPerDay ?? ""));
         setProdCartonSize(String(prodConfig.config.cartonSize ?? "1"));
         setProdShiftHours(String(prodConfig.config.shiftHours ?? "8"));
+        setProdDaysPerMonth(String(prodConfig.config.productionDaysPerMonth ?? "20"));
       }
     }
   }, [prodConfig, prodInitialized]);
 
-  const hasLaborSetup = (prodConfig?.laborCostPerUnit ?? null) !== null;
+  const isFirstSave = !prodConfig?.config;
+  const hasLaborSetup = prodConfig?.config?.laborCostPerUnit !== null && prodConfig?.config?.laborCostPerUnit !== undefined;
+  const hasOverheadSetup = prodConfig?.config?.overheadCostPerUnit !== null && prodConfig?.config?.overheadCostPerUnit !== undefined;
 
   async function handleSaveProdConfig() {
     setIsSavingProd(true);
     try {
+      const reason = isFirstSave ? "initial" : (changeReason || "");
+      if (!isFirstSave && !reason) {
+        toast({ variant: "destructive", title: "Please select a change reason" });
+        setIsSavingProd(false);
+        return;
+      }
       await fetch(getApiUrl(`/skus/${skuId}/production-config`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -301,11 +320,17 @@ export default function SkuDetail({ id }: { id: string }) {
           unitsPerDay: parseInt(prodUnitsPerDay) || null,
           cartonSize: parseInt(prodCartonSize) || 1,
           shiftHours: parseFloat(prodShiftHours) || 8,
+          productionDaysPerMonth: parseInt(prodDaysPerMonth) || 20,
           teamMemberIds: prodMemberIds,
+          changeReason: reason,
+          changeNote: changeNote || null,
         }),
       });
       await refetchProdConfig();
       qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      setProdDirty(false);
+      setChangeReason("");
+      setChangeNote("");
       toast({ title: "Production setup saved — COGS updated" });
     } catch {
       toast({ variant: "destructive", title: "Error saving production setup" });
@@ -324,6 +349,16 @@ export default function SkuDetail({ id }: { id: string }) {
     const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
     return (totalRate * sh) / totalUnits;
   }, [teamMembers, prodMemberIds, prodUnitsPerDay, prodCartonSize, prodShiftHours]);
+
+  const previewMonthlyUnits = useMemo(() => {
+    const upd = parseInt(prodUnitsPerDay) || 0;
+    const cs = parseInt(prodCartonSize) || 1;
+    const dpm = parseInt(prodDaysPerMonth) || 20;
+    return upd * cs * dpm;
+  }, [prodUnitsPerDay, prodCartonSize, prodDaysPerMonth]);
+
+  const daysPerMonthFactory = prodConfig?.daysPerMonth ?? 20.8;
+  const daysPerMonthWarning = parseInt(prodDaysPerMonth) > daysPerMonthFactory;
 
   const snapshotData = useMemo(() => {
     const all = [...(sku?.snapshots || [])].reverse();
@@ -800,16 +835,19 @@ export default function SkuDetail({ id }: { id: string }) {
             <div className="text-left">
               <div className="text-sm font-bold uppercase tracking-wider text-orange-700">Production Setup</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {hasLaborSetup
-                  ? `Labor cost: ${formatCurrency(prodConfig?.laborCostPerUnit ?? null)}/unit`
-                  : "Set up team members to calculate labor cost"}
+                {hasLaborSetup || hasOverheadSetup
+                  ? [
+                      hasLaborSetup ? `Labor ${formatCurrency(prodConfig?.config?.laborCostPerUnit ?? null)}/unit` : null,
+                      hasOverheadSetup ? `Overhead ${formatCurrency(prodConfig?.config?.overheadCostPerUnit ?? null)}/unit` : null,
+                    ].filter(Boolean).join(" · ")
+                  : "Set up team and production days to calculate labor & overhead cost"}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {hasLaborSetup && (
+            {(hasLaborSetup || hasOverheadSetup) && (
               <Badge className="bg-orange-100 text-orange-800 border-0 text-xs">
-                {formatCurrency(prodConfig?.laborCostPerUnit ?? null)}/unit
+                {formatCurrency((prodConfig?.config?.laborCostPerUnit ?? 0) + (prodConfig?.config?.overheadCostPerUnit ?? 0))}/unit
               </Badge>
             )}
             {prodSectionOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -818,10 +856,10 @@ export default function SkuDetail({ id }: { id: string }) {
 
         {prodSectionOpen && (
           <CardContent className="pt-5 space-y-5">
-            {/* Team Members */}
+            {/* 1. Team Members */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm font-semibold">Who works on this product?</span>
+                <span className="text-sm font-semibold">1. Who works on this product?</span>
                 <Tooltip>
                   <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
                   <TooltipContent className="max-w-60 text-xs">Select everyone who touches this product during production. Their loaded hourly rates will be added together.</TooltipContent>
@@ -837,6 +875,7 @@ export default function SkuDetail({ id }: { id: string }) {
                         checked={prodMemberIds.includes(m.id)}
                         onCheckedChange={(checked) => {
                           setProdMemberIds(prev => checked ? [...prev, m.id] : prev.filter(id => id !== m.id));
+                          setProdDirty(true);
                         }}
                       />
                       <div className="min-w-0 flex-1">
@@ -850,85 +889,177 @@ export default function SkuDetail({ id }: { id: string }) {
               )}
             </div>
 
-            {/* Quantity */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
-                  Units made per day
-                  <Tooltip>
-                    <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
-                    <TooltipContent className="text-xs max-w-52">How many individual units (cartons, bags, jars…) your team makes in one shift for this product.</TooltipContent>
-                  </Tooltip>
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 200"
-                  value={prodUnitsPerDay}
-                  onChange={e => setProdUnitsPerDay(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
-                  Units per carton
-                  <Tooltip>
-                    <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
-                    <TooltipContent className="text-xs max-w-52">If you sell in cartons of 12, set this to 12. Leave as 1 if you sell individual units.</TooltipContent>
-                  </Tooltip>
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={prodCartonSize}
-                  onChange={e => setProdCartonSize(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
-                  Shift hours
-                  <Tooltip>
-                    <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
-                    <TooltipContent className="text-xs max-w-52">How many hours the team works on this product in one production run.</TooltipContent>
-                  </Tooltip>
-                </label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  value={prodShiftHours}
-                  onChange={e => setProdShiftHours(e.target.value)}
-                  className="h-9"
-                />
+            {/* 2. Units per day + carton size */}
+            <div>
+              <p className="text-sm font-semibold mb-3">2. Output</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                    Units made per production day
+                    <Tooltip>
+                      <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                      <TooltipContent className="text-xs max-w-52">How many individual units your team makes in one shift for this product.</TooltipContent>
+                    </Tooltip>
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 200"
+                    value={prodUnitsPerDay}
+                    onChange={e => { setProdUnitsPerDay(e.target.value); setProdDirty(true); }}
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                    Units per carton
+                    <Tooltip>
+                      <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                      <TooltipContent className="text-xs max-w-52">If you sell in cartons of 12, set this to 12. Leave as 1 if you sell individual units.</TooltipContent>
+                    </Tooltip>
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={prodCartonSize}
+                    onChange={e => { setProdCartonSize(e.target.value); setProdDirty(true); }}
+                    className="h-9"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Live preview */}
-            {previewLaborCost !== null && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Labor cost per unit</div>
-                    <div className="text-2xl font-bold text-orange-700 mt-0.5">{formatCurrency(previewLaborCost)}</div>
+            {/* 3. Production days per month */}
+            <div>
+              <p className="text-sm font-semibold mb-3">3. Production days per month for this product</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Input
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="20"
+                  value={prodDaysPerMonth}
+                  onChange={e => { setProdDaysPerMonth(e.target.value); setProdDirty(true); }}
+                  className="h-9 w-24"
+                />
+                <span className="text-sm text-muted-foreground">days / month</span>
+                {daysPerMonthWarning && (
+                  <div className="flex items-center gap-1.5 text-amber-600 text-xs">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Exceeds factory average ({daysPerMonthFactory} days/month)
                   </div>
-                  <div className="text-xs text-muted-foreground text-right">
+                )}
+              </div>
+            </div>
+
+            {/* Advanced: Shift hours */}
+            <div>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowAdvanced(a => !a)}
+              >
+                {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                Advanced settings
+              </button>
+              {showAdvanced && (
+                <div className="mt-3 max-w-xs">
+                  <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
+                    Shift hours
+                    <Tooltip>
+                      <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
+                      <TooltipContent className="text-xs max-w-52">How many hours the team works on this product in one production run.</TooltipContent>
+                    </Tooltip>
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    value={prodShiftHours}
+                    onChange={e => { setProdShiftHours(e.target.value); setProdDirty(true); }}
+                    className="h-9"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Live confirmation panel */}
+            {(previewMonthlyUnits > 0 || previewLaborCost !== null) && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">Live preview</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Monthly units</div>
+                    <div className="text-base font-bold text-foreground">{previewMonthlyUnits > 0 ? previewMonthlyUnits.toLocaleString() : "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Annual units</div>
+                    <div className="text-base font-bold text-foreground">{previewMonthlyUnits > 0 ? (previewMonthlyUnits * 12).toLocaleString() : "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Labor / unit</div>
+                    <div className="text-base font-bold text-orange-700">{previewLaborCost !== null ? formatCurrency(previewLaborCost) : "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Combined pre-ingredient</div>
+                    <div className="text-base font-bold text-slate-700">
+                      {previewLaborCost !== null ? formatCurrency(previewLaborCost + (prodConfig?.config?.overheadCostPerUnit ?? 0)) : "—"}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">labor + overhead</div>
+                  </div>
+                </div>
+                {previewLaborCost !== null && (
+                  <div className="text-xs text-muted-foreground border-t border-orange-200 pt-2">
                     {(() => {
                       const selected = teamMembers?.filter(m => prodMemberIds.includes(m.id)) ?? [];
                       const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
                       const totalUnits = (parseInt(prodUnitsPerDay) || 0) * (parseInt(prodCartonSize) || 1);
-                      return `€${totalRate.toFixed(2)}/hr × ${parseFloat(prodShiftHours) || 8} hrs ÷ ${totalUnits} units`;
+                      return `${selected.map(m => m.name).join(", ")} · €${totalRate.toFixed(2)}/hr × ${parseFloat(prodShiftHours) || 8} hrs ÷ ${totalUnits} units`;
                     })()}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Change reason tiles — only shown on subsequent saves */}
+            {!isFirstSave && prodDirty && (
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-semibold">Why are you changing this?</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { key: "efficiency", label: "Efficiency", desc: "Output changed" },
+                    { key: "team_changed", label: "Team changed", desc: "People added/removed" },
+                    { key: "shift_changed", label: "Shift changed", desc: "Hours adjusted" },
+                    { key: "wages_changed", label: "Wages changed", desc: "Rates updated" },
+                  ].map(r => (
+                    <button
+                      key={r.key}
+                      type="button"
+                      onClick={() => setChangeReason(r.key)}
+                      className={`border rounded-lg px-3 py-2.5 text-left transition-colors ${changeReason === r.key ? "border-orange-400 bg-orange-50" : "hover:border-orange-300 hover:bg-orange-50/50"}`}
+                    >
+                      <div className="text-xs font-semibold">{r.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{r.desc}</div>
+                    </button>
+                  ))}
                 </div>
+                {changeReason && (
+                  <Input
+                    placeholder="Optional note (e.g. new hire, line speed improvement…)"
+                    value={changeNote}
+                    onChange={e => setChangeNote(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                )}
               </div>
             )}
 
             <div className="flex items-center justify-end gap-3 pt-1 border-t">
-              {prodConfig?.explanation && !previewLaborCost && (
-                <span className="text-xs text-muted-foreground flex-1 italic">{prodConfig.explanation}</span>
-              )}
-              <Button onClick={handleSaveProdConfig} disabled={isSavingProd} size="sm">
+              <Button
+                onClick={handleSaveProdConfig}
+                disabled={isSavingProd || (!isFirstSave && prodDirty && !changeReason)}
+                size="sm"
+              >
                 {isSavingProd ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                 Save &amp; apply
               </Button>
