@@ -225,6 +225,14 @@ async function signObjectURL({
     );
   }
 
-  const { signed_url: signedURL } = await response.json();
-  return signedURL;
+  const json: unknown = await response.json();
+  if (
+    typeof json !== "object" ||
+    json === null ||
+    !("signed_url" in json) ||
+    typeof (json as Record<string, unknown>).signed_url !== "string"
+  ) {
+    throw new Error("Unexpected response shape from sidecar sign-url endpoint");
+  }
+  return (json as { signed_url: string }).signed_url;
 }

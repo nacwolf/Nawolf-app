@@ -418,6 +418,8 @@ router.get("/ingredients/:id/attachments", requireAuth, async (req, res): Promis
   res.json(attachments);
 });
 
+const ALLOWED_ATTACHMENT_MIME_TYPES = ["application/pdf", "image/jpeg"] as const;
+
 router.post("/ingredients/:id/attachments", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) {
@@ -425,19 +427,35 @@ router.post("/ingredients/:id/attachments", requireAuth, async (req, res): Promi
     return;
   }
 
-  const { fileName, objectPath, fileType } = req.body;
-  if (!fileName || !objectPath) {
-    res.status(400).json({ error: "fileName and objectPath are required" });
+  interface AttachmentBody { fileName?: string; objectPath?: string; fileType?: string; }
+  const { fileName, objectPath, fileType } = req.body as AttachmentBody;
+
+  if (!fileName || typeof fileName !== "string" || !fileName.trim()) {
+    res.status(400).json({ error: "fileName is required" });
+    return;
+  }
+  if (!objectPath || typeof objectPath !== "string" || !objectPath.startsWith("/objects/")) {
+    res.status(400).json({ error: "objectPath is required and must be a valid object path" });
+    return;
+  }
+  if (fileType !== undefined && !(ALLOWED_ATTACHMENT_MIME_TYPES as readonly string[]).includes(fileType)) {
+    res.status(400).json({ error: `fileType must be one of: ${ALLOWED_ATTACHMENT_MIME_TYPES.join(", ")}` });
     return;
   }
 
   const auth = getAuth(req);
 
+  const [ingredient] = await db.select({ id: ingredientsTable.id }).from(ingredientsTable).where(eq(ingredientsTable.id, id));
+  if (!ingredient) {
+    res.status(404).json({ error: "Ingredient not found" });
+    return;
+  }
+
   const [attachment] = await db
     .insert(ingredientAttachmentsTable)
     .values({
       ingredientId: id,
-      fileName,
+      fileName: fileName.trim(),
       objectPath,
       fileType: fileType ?? null,
       uploadedBy: auth?.userId ?? null,
