@@ -337,3 +337,69 @@ export interface MarginTrendPoint {
   reviewCount: number;
   criticalCount: number;
 }
+
+export interface PrintingBlockSupplier {
+  id: number;
+  name: string;
+  pricePerBlock: number;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface CreatePrintingBlockSupplierBody {
+  name: string;
+  pricePerBlock: number;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface UpdatePrintingBlockSupplierBody {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  pricePerBlock?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type SkuPrintingBlockConfigStatus =
+  (typeof SkuPrintingBlockConfigStatus)[keyof typeof SkuPrintingBlockConfigStatus];
+
+export const SkuPrintingBlockConfigStatus = {
+  active: "active",
+  retired: "retired",
+} as const;
+
+export interface SkuPrintingBlockConfig {
+  id: number;
+  skuId: number;
+  supplierId: number;
+  numBlocks: number;
+  moq: number;
+  status: SkuPrintingBlockConfigStatus;
+  /** @nullable */
+  retiredAt?: string | null;
+  /** @nullable */
+  retiredReason?: string | null;
+  /** @nullable */
+  retiredBy?: string | null;
+  createdAt: string;
+}
+
+export interface SkuPrintingBlockConfigWithSupplier extends SkuPrintingBlockConfig {
+  supplierName: string;
+  pricePerBlock: number;
+  amortizedCostPerUnit: number;
+}
+
+export interface CreateSkuPrintingBlockConfigBody {
+  supplierId: number;
+  numBlocks: number;
+  moq: number;
+}
+
+export interface RetireSkuPrintingBlockConfigBody {
+  /** @nullable */
+  reason?: string | null;
+}

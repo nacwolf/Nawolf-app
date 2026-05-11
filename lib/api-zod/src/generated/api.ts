@@ -489,3 +489,114 @@ export const GetMarginTrendsResponseItem = zod.object({
   criticalCount: zod.number(),
 });
 export const GetMarginTrendsResponse = zod.array(GetMarginTrendsResponseItem);
+
+/**
+ * @summary List all printing block suppliers
+ */
+export const ListPrintingBlockSuppliersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  pricePerBlock: zod.number(),
+  notes: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ListPrintingBlockSuppliersResponse = zod.array(ListPrintingBlockSuppliersResponseItem);
+
+/**
+ * @summary Create a printing block supplier
+ */
+export const CreatePrintingBlockSupplierBody = zod.object({
+  name: zod.string(),
+  pricePerBlock: zod.number(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a printing block supplier
+ */
+export const UpdatePrintingBlockSupplierParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdatePrintingBlockSupplierBody = zod.object({
+  name: zod.string().nullish(),
+  pricePerBlock: zod.number().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a printing block supplier
+ */
+export const DeletePrintingBlockSupplierParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary List all printing block configs for a SKU
+ */
+export const ListSkuPrintingBlockConfigsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SkuPrintingBlockConfigItem = zod.object({
+  id: zod.number(),
+  skuId: zod.number(),
+  supplierId: zod.number(),
+  numBlocks: zod.number(),
+  moq: zod.number(),
+  status: zod.enum(["active", "retired"]),
+  retiredAt: zod.string().nullish(),
+  retiredReason: zod.string().nullish(),
+  retiredBy: zod.string().nullish(),
+  createdAt: zod.string(),
+  supplierName: zod.string(),
+  pricePerBlock: zod.number(),
+  amortizedCostPerUnit: zod.number(),
+});
+export const ListSkuPrintingBlockConfigsResponse = zod.array(SkuPrintingBlockConfigItem);
+
+/**
+ * @summary Get active printing block config for a SKU
+ */
+export const GetSkuPrintingBlockConfigParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetSkuPrintingBlockConfigResponse = SkuPrintingBlockConfigItem.nullable();
+
+/**
+ * @summary Set a new active printing block config for a SKU
+ */
+export const SetSkuPrintingBlockConfigParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateSkuPrintingBlockConfigBody = zod.object({
+  supplierId: zod.number(),
+  numBlocks: zod.number(),
+  moq: zod.number(),
+});
+
+/**
+ * @summary Retire the active printing block config for a SKU
+ */
+export const RetireSkuPrintingBlockConfigParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RetireSkuPrintingBlockConfigBody = zod.object({
+  reason: zod.string().nullish(),
+});
+
+export const SkuPrintingBlockConfigBase = zod.object({
+  id: zod.number(),
+  skuId: zod.number(),
+  supplierId: zod.number(),
+  numBlocks: zod.number(),
+  moq: zod.number(),
+  status: zod.enum(["active", "retired"]),
+  retiredAt: zod.string().nullish(),
+  retiredReason: zod.string().nullish(),
+  retiredBy: zod.string().nullish(),
+  createdAt: zod.string(),
+});

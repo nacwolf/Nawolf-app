@@ -8,6 +8,7 @@ import teamMembersRouter from "./team-members";
 import productionRouter from "./production";
 import overheadRouter from "./overhead";
 import storageRouter from "./storage";
+import printingBlocksRouter from "./printingBlocks";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(teamMembersRouter);
 router.use(productionRouter);
 router.use(overheadRouter);
 router.use(storageRouter);
+router.use(printingBlocksRouter);
 
 export default router;

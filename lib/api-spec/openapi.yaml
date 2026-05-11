@@ -17,6 +17,8 @@ tags:
     description: Dashboard analytics
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: printingBlocks
+    description: Printing block supplier and per-SKU config management
 
 paths:
   /healthz:
@@ -545,6 +547,214 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/SkuSnapshot"
+
+  /printing-block-suppliers:
+    get:
+      operationId: listPrintingBlockSuppliers
+      tags: [printingBlocks]
+      summary: List all printing block suppliers
+      responses:
+        "200":
+          description: List of suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PrintingBlockSupplier"
+    post:
+      operationId: createPrintingBlockSupplier
+      tags: [printingBlocks]
+      summary: Create a printing block supplier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePrintingBlockSupplierBody"
+      responses:
+        "201":
+          description: Created supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrintingBlockSupplier"
+
+  /printing-block-suppliers/{id}:
+    patch:
+      operationId: updatePrintingBlockSupplier
+      tags: [printingBlocks]
+      summary: Update a printing block supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePrintingBlockSupplierBody"
+      responses:
+        "200":
+          description: Updated supplier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrintingBlockSupplier"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePrintingBlockSupplier
+      tags: [printingBlocks]
+      summary: Delete a printing block supplier (blocked if active configs exist)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict — supplier has active SKU configs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /skus/{id}/printing-block-configs:
+    get:
+      operationId: listSkuPrintingBlockConfigs
+      tags: [printingBlocks]
+      summary: List all printing block configs for a SKU (history)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of configs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SkuPrintingBlockConfigWithSupplier"
+        "404":
+          description: SKU not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /skus/{id}/printing-block-config:
+    get:
+      operationId: getSkuPrintingBlockConfig
+      tags: [printingBlocks]
+      summary: Get the active printing block config for a SKU (null if none)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Active config or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/SkuPrintingBlockConfigWithSupplier"
+                  - type: "null"
+        "404":
+          description: SKU not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: setSkuPrintingBlockConfig
+      tags: [printingBlocks]
+      summary: Set a new active printing block config for a SKU (retires existing active config)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSkuPrintingBlockConfigBody"
+      responses:
+        "201":
+          description: Created config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkuPrintingBlockConfigWithSupplier"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: SKU or supplier not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /skus/{id}/printing-block-config/retire:
+    post:
+      operationId: retireSkuPrintingBlockConfig
+      tags: [printingBlocks]
+      summary: Retire the active printing block config for a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetireSkuPrintingBlockConfigBody"
+      responses:
+        "200":
+          description: Retired config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkuPrintingBlockConfig"
+        "404":
+          description: SKU or active config not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /dashboard/summary:
     get:
@@ -1134,3 +1344,140 @@ components:
         - healthyCount
         - reviewCount
         - criticalCount
+
+    PrintingBlockSupplier:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        pricePerBlock:
+          type: number
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - pricePerBlock
+        - createdAt
+
+    CreatePrintingBlockSupplierBody:
+      type: object
+      properties:
+        name:
+          type: string
+        pricePerBlock:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+        - pricePerBlock
+
+    UpdatePrintingBlockSupplierBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        pricePerBlock:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+
+    SkuPrintingBlockConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuId:
+          type: integer
+        supplierId:
+          type: integer
+        numBlocks:
+          type: integer
+        moq:
+          type: integer
+        status:
+          type: string
+          enum: [active, retired]
+        retiredAt:
+          type: ["string", "null"]
+        retiredReason:
+          type: ["string", "null"]
+        retiredBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - skuId
+        - supplierId
+        - numBlocks
+        - moq
+        - status
+        - createdAt
+
+    SkuPrintingBlockConfigWithSupplier:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuId:
+          type: integer
+        supplierId:
+          type: integer
+        numBlocks:
+          type: integer
+        moq:
+          type: integer
+        status:
+          type: string
+          enum: [active, retired]
+        retiredAt:
+          type: ["string", "null"]
+        retiredReason:
+          type: ["string", "null"]
+        retiredBy:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        supplierName:
+          type: string
+        pricePerBlock:
+          type: number
+        amortizedCostPerUnit:
+          type: number
+      required:
+        - id
+        - skuId
+        - supplierId
+        - numBlocks
+        - moq
+        - status
+        - createdAt
+        - supplierName
+        - pricePerBlock
+        - amortizedCostPerUnit
+
+    CreateSkuPrintingBlockConfigBody:
+      type: object
+      properties:
+        supplierId:
+          type: integer
+        numBlocks:
+          type: integer
+        moq:
+          type: integer
+      required:
+        - supplierId
+        - numBlocks
+        - moq
+
+    RetireSkuPrintingBlockConfigBody:
+      type: object
+      properties:
+        reason:
+          type: ["string", "null"]

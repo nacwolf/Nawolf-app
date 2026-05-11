@@ -3,6 +3,27 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ingredientsTable } from "./ingredients";
 
+export const printingBlockSuppliersTable = pgTable("printing_block_suppliers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  pricePerBlock: numeric("price_per_block", { precision: 12, scale: 4 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const skuPrintingBlockConfigsTable = pgTable("sku_printing_block_configs", {
+  id: serial("id").primaryKey(),
+  skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
+  supplierId: integer("supplier_id").notNull().references(() => printingBlockSuppliersTable.id, { onDelete: "restrict" }),
+  numBlocks: integer("num_blocks").notNull(),
+  moq: integer("moq").notNull(),
+  status: text("status").notNull().default("active"),
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  retiredReason: text("retired_reason"),
+  retiredBy: text("retired_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const skusTable = pgTable("skus", {
   id: serial("id").primaryKey(),
   skuCode: text("sku_code").notNull().unique(),

@@ -21,7 +21,9 @@ import type {
   CostLine,
   CreateIngredientAttachmentBody,
   CreateIngredientBody,
+  CreatePrintingBlockSupplierBody,
   CreateSkuBody,
+  CreateSkuPrintingBlockConfigBody,
   DashboardSummary,
   EditIngredientPriceBody,
   ErrorResponse,
@@ -31,12 +33,17 @@ import type {
   IngredientPrice,
   IngredientWithPrice,
   MarginTrendPoint,
+  PrintingBlockSupplier,
+  RetireSkuPrintingBlockConfigBody,
   SkuDetail,
+  SkuPrintingBlockConfig,
+  SkuPrintingBlockConfigWithSupplier,
   SkuSnapshot,
   SkuWithMargin,
   UpdateIngredientBody,
   UpdateIngredientPriceBody,
   UpdateIngredientPriceResponse,
+  UpdatePrintingBlockSupplierBody,
   UpdateSkuBody,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -2224,3 +2231,615 @@ export function useGetMarginTrends<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all printing block suppliers
+ */
+export const getListPrintingBlockSuppliersUrl = () => {
+  return `/api/printing-block-suppliers`;
+};
+
+export const listPrintingBlockSuppliers = async (
+  options?: RequestInit,
+): Promise<PrintingBlockSupplier[]> => {
+  return customFetch<PrintingBlockSupplier[]>(getListPrintingBlockSuppliersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPrintingBlockSuppliersQueryKey = () => {
+  return [`/api/printing-block-suppliers`] as const;
+};
+
+export const getListPrintingBlockSuppliersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPrintingBlockSuppliers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPrintingBlockSuppliers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListPrintingBlockSuppliersQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listPrintingBlockSuppliers>>> = ({
+    signal,
+  }) => listPrintingBlockSuppliers({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPrintingBlockSuppliers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPrintingBlockSuppliersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPrintingBlockSuppliers>>
+>;
+export type ListPrintingBlockSuppliersQueryError = ErrorType<unknown>;
+
+export function useListPrintingBlockSuppliers<
+  TData = Awaited<ReturnType<typeof listPrintingBlockSuppliers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listPrintingBlockSuppliers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPrintingBlockSuppliersQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a printing block supplier
+ */
+export const getCreatePrintingBlockSupplierUrl = () => {
+  return `/api/printing-block-suppliers`;
+};
+
+export const createPrintingBlockSupplier = async (
+  createPrintingBlockSupplierBody: CreatePrintingBlockSupplierBody,
+  options?: RequestInit,
+): Promise<PrintingBlockSupplier> => {
+  return customFetch<PrintingBlockSupplier>(getCreatePrintingBlockSupplierUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createPrintingBlockSupplierBody),
+  });
+};
+
+export const getCreatePrintingBlockSupplierMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPrintingBlockSupplier>>,
+    TError,
+    { data: BodyType<CreatePrintingBlockSupplierBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createPrintingBlockSupplier>>,
+  TError,
+  { data: BodyType<CreatePrintingBlockSupplierBody> },
+  TContext
+> => {
+  const mutationKey = ["createPrintingBlockSupplier"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createPrintingBlockSupplier>>,
+    { data: BodyType<CreatePrintingBlockSupplierBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+    return createPrintingBlockSupplier(data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreatePrintingBlockSupplierMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createPrintingBlockSupplier>>
+>;
+export type CreatePrintingBlockSupplierMutationBody = BodyType<CreatePrintingBlockSupplierBody>;
+export type CreatePrintingBlockSupplierMutationError = ErrorType<unknown>;
+
+export const useCreatePrintingBlockSupplier = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createPrintingBlockSupplier>>,
+    TError,
+    { data: BodyType<CreatePrintingBlockSupplierBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createPrintingBlockSupplier>>,
+  TError,
+  { data: BodyType<CreatePrintingBlockSupplierBody> },
+  TContext
+> => {
+  return useMutation(getCreatePrintingBlockSupplierMutationOptions(options));
+};
+
+/**
+ * @summary Update a printing block supplier
+ */
+export const getUpdatePrintingBlockSupplierUrl = (id: number) => {
+  return `/api/printing-block-suppliers/${id}`;
+};
+
+export const updatePrintingBlockSupplier = async (
+  id: number,
+  updatePrintingBlockSupplierBody: UpdatePrintingBlockSupplierBody,
+  options?: RequestInit,
+): Promise<PrintingBlockSupplier> => {
+  return customFetch<PrintingBlockSupplier>(getUpdatePrintingBlockSupplierUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updatePrintingBlockSupplierBody),
+  });
+};
+
+export const getUpdatePrintingBlockSupplierMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePrintingBlockSupplier>>,
+    TError,
+    { id: number; data: BodyType<UpdatePrintingBlockSupplierBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updatePrintingBlockSupplier>>,
+  TError,
+  { id: number; data: BodyType<UpdatePrintingBlockSupplierBody> },
+  TContext
+> => {
+  const mutationKey = ["updatePrintingBlockSupplier"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updatePrintingBlockSupplier>>,
+    { id: number; data: BodyType<UpdatePrintingBlockSupplierBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+    return updatePrintingBlockSupplier(id, data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdatePrintingBlockSupplierMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updatePrintingBlockSupplier>>
+>;
+export type UpdatePrintingBlockSupplierMutationBody = BodyType<UpdatePrintingBlockSupplierBody>;
+export type UpdatePrintingBlockSupplierMutationError = ErrorType<ErrorResponse>;
+
+export const useUpdatePrintingBlockSupplier = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updatePrintingBlockSupplier>>,
+    TError,
+    { id: number; data: BodyType<UpdatePrintingBlockSupplierBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updatePrintingBlockSupplier>>,
+  TError,
+  { id: number; data: BodyType<UpdatePrintingBlockSupplierBody> },
+  TContext
+> => {
+  return useMutation(getUpdatePrintingBlockSupplierMutationOptions(options));
+};
+
+/**
+ * @summary Delete a printing block supplier
+ */
+export const getDeletePrintingBlockSupplierUrl = (id: number) => {
+  return `/api/printing-block-suppliers/${id}`;
+};
+
+export const deletePrintingBlockSupplier = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeletePrintingBlockSupplierUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeletePrintingBlockSupplierMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePrintingBlockSupplier>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deletePrintingBlockSupplier>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deletePrintingBlockSupplier"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deletePrintingBlockSupplier>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return deletePrintingBlockSupplier(id, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeletePrintingBlockSupplierMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deletePrintingBlockSupplier>>
+>;
+export type DeletePrintingBlockSupplierMutationError = ErrorType<ErrorResponse>;
+
+export const useDeletePrintingBlockSupplier = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deletePrintingBlockSupplier>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deletePrintingBlockSupplier>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeletePrintingBlockSupplierMutationOptions(options));
+};
+
+/**
+ * @summary List all printing block configs for a SKU
+ */
+export const getListSkuPrintingBlockConfigsUrl = (id: number) => {
+  return `/api/skus/${id}/printing-block-configs`;
+};
+
+export const listSkuPrintingBlockConfigs = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SkuPrintingBlockConfigWithSupplier[]> => {
+  return customFetch<SkuPrintingBlockConfigWithSupplier[]>(
+    getListSkuPrintingBlockConfigsUrl(id),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getListSkuPrintingBlockConfigsQueryKey = (id: number) => {
+  return [`/api/skus/${id}/printing-block-configs`] as const;
+};
+
+export const getListSkuPrintingBlockConfigsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListSkuPrintingBlockConfigsQueryKey(id);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>> = ({
+    signal,
+  }) => listSkuPrintingBlockConfigs(id, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSkuPrintingBlockConfigsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>
+>;
+export type ListSkuPrintingBlockConfigsQueryError = ErrorType<ErrorResponse>;
+
+export function useListSkuPrintingBlockConfigs<
+  TData = Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSkuPrintingBlockConfigs>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSkuPrintingBlockConfigsQueryOptions(id, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the active printing block config for a SKU
+ */
+export const getGetSkuPrintingBlockConfigUrl = (id: number) => {
+  return `/api/skus/${id}/printing-block-config`;
+};
+
+export const getSkuPrintingBlockConfig = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SkuPrintingBlockConfigWithSupplier | null> => {
+  return customFetch<SkuPrintingBlockConfigWithSupplier | null>(
+    getGetSkuPrintingBlockConfigUrl(id),
+    { ...options, method: "GET" },
+  );
+};
+
+export const getGetSkuPrintingBlockConfigQueryKey = (id: number) => {
+  return [`/api/skus/${id}/printing-block-config`] as const;
+};
+
+export const getGetSkuPrintingBlockConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetSkuPrintingBlockConfigQueryKey(id);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>> = ({
+    signal,
+  }) => getSkuPrintingBlockConfig(id, { signal, ...requestOptions });
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSkuPrintingBlockConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>
+>;
+export type GetSkuPrintingBlockConfigQueryError = ErrorType<ErrorResponse>;
+
+export function useGetSkuPrintingBlockConfig<
+  TData = Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSkuPrintingBlockConfig>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSkuPrintingBlockConfigQueryOptions(id, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set a new active printing block config for a SKU
+ */
+export const getSetSkuPrintingBlockConfigUrl = (id: number) => {
+  return `/api/skus/${id}/printing-block-config`;
+};
+
+export const setSkuPrintingBlockConfig = async (
+  id: number,
+  createSkuPrintingBlockConfigBody: CreateSkuPrintingBlockConfigBody,
+  options?: RequestInit,
+): Promise<SkuPrintingBlockConfigWithSupplier> => {
+  return customFetch<SkuPrintingBlockConfigWithSupplier>(getSetSkuPrintingBlockConfigUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSkuPrintingBlockConfigBody),
+  });
+};
+
+export const getSetSkuPrintingBlockConfigMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSkuPrintingBlockConfig>>,
+    TError,
+    { id: number; data: BodyType<CreateSkuPrintingBlockConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setSkuPrintingBlockConfig>>,
+  TError,
+  { id: number; data: BodyType<CreateSkuPrintingBlockConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["setSkuPrintingBlockConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setSkuPrintingBlockConfig>>,
+    { id: number; data: BodyType<CreateSkuPrintingBlockConfigBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+    return setSkuPrintingBlockConfig(id, data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetSkuPrintingBlockConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setSkuPrintingBlockConfig>>
+>;
+export type SetSkuPrintingBlockConfigMutationBody = BodyType<CreateSkuPrintingBlockConfigBody>;
+export type SetSkuPrintingBlockConfigMutationError = ErrorType<ErrorResponse>;
+
+export const useSetSkuPrintingBlockConfig = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setSkuPrintingBlockConfig>>,
+    TError,
+    { id: number; data: BodyType<CreateSkuPrintingBlockConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setSkuPrintingBlockConfig>>,
+  TError,
+  { id: number; data: BodyType<CreateSkuPrintingBlockConfigBody> },
+  TContext
+> => {
+  return useMutation(getSetSkuPrintingBlockConfigMutationOptions(options));
+};
+
+/**
+ * @summary Retire the active printing block config for a SKU
+ */
+export const getRetireSkuPrintingBlockConfigUrl = (id: number) => {
+  return `/api/skus/${id}/printing-block-config/retire`;
+};
+
+export const retireSkuPrintingBlockConfig = async (
+  id: number,
+  retireSkuPrintingBlockConfigBody: RetireSkuPrintingBlockConfigBody,
+  options?: RequestInit,
+): Promise<SkuPrintingBlockConfig> => {
+  return customFetch<SkuPrintingBlockConfig>(getRetireSkuPrintingBlockConfigUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(retireSkuPrintingBlockConfigBody),
+  });
+};
+
+export const getRetireSkuPrintingBlockConfigMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retireSkuPrintingBlockConfig>>,
+    TError,
+    { id: number; data: BodyType<RetireSkuPrintingBlockConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof retireSkuPrintingBlockConfig>>,
+  TError,
+  { id: number; data: BodyType<RetireSkuPrintingBlockConfigBody> },
+  TContext
+> => {
+  const mutationKey = ["retireSkuPrintingBlockConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof retireSkuPrintingBlockConfig>>,
+    { id: number; data: BodyType<RetireSkuPrintingBlockConfigBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+    return retireSkuPrintingBlockConfig(id, data, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RetireSkuPrintingBlockConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof retireSkuPrintingBlockConfig>>
+>;
+export type RetireSkuPrintingBlockConfigMutationBody = BodyType<RetireSkuPrintingBlockConfigBody>;
+export type RetireSkuPrintingBlockConfigMutationError = ErrorType<ErrorResponse>;
+
+export const useRetireSkuPrintingBlockConfig = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof retireSkuPrintingBlockConfig>>,
+    TError,
+    { id: number; data: BodyType<RetireSkuPrintingBlockConfigBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof retireSkuPrintingBlockConfig>>,
+  TError,
+  { id: number; data: BodyType<RetireSkuPrintingBlockConfigBody> },
+  TContext
+> => {
+  return useMutation(getRetireSkuPrintingBlockConfigMutationOptions(options));
+};

@@ -1,6 +1,7 @@
 import { db, ingredientsTable, ingredientPricesTable, skusTable, costLinesTable, skuSnapshotsTable } from "@workspace/db";
 import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable, overheadItemsTable, appSettingsTable, productionConfigHistoryTable } from "@workspace/db";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
+import { eq, desc, sql, inArray, and } from "drizzle-orm";
 import { logger } from "./logger";
 
 export function computeMarginStatus(grossMargin: number | null): "healthy" | "review" | "critical" | "unknown" {
@@ -113,7 +114,17 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
   const laborCost = prodConfig?.laborCostPerUnit ? parseFloat(prodConfig.laborCostPerUnit) : null;
   const overheadCost = prodConfig?.overheadCostPerUnit ? parseFloat(prodConfig.overheadCostPerUnit) : null;
 
-  if (costLines.length === 0 && laborCost === null && overheadCost === null) return { totalCogs: null, grossMargin: null };
+  const activeBlockConfigs = await db
+    .select({
+      numBlocks: skuPrintingBlockConfigsTable.numBlocks,
+      moq: skuPrintingBlockConfigsTable.moq,
+      pricePerBlock: printingBlockSuppliersTable.pricePerBlock,
+    })
+    .from(skuPrintingBlockConfigsTable)
+    .innerJoin(printingBlockSuppliersTable, eq(skuPrintingBlockConfigsTable.supplierId, printingBlockSuppliersTable.id))
+    .where(and(eq(skuPrintingBlockConfigsTable.skuId, skuId), eq(skuPrintingBlockConfigsTable.status, "active")));
+
+  if (costLines.length === 0 && laborCost === null && overheadCost === null && activeBlockConfigs.length === 0) return { totalCogs: null, grossMargin: null };
 
   let totalCogs = 0;
   for (const line of costLines) {
@@ -124,6 +135,11 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
 
   if (laborCost !== null) totalCogs += laborCost;
   if (overheadCost !== null) totalCogs += overheadCost;
+
+  for (const config of activeBlockConfigs) {
+    const amortized = (config.numBlocks * parseFloat(config.pricePerBlock)) / config.moq;
+    totalCogs += amortized;
+  }
 
   const sellPrice = parseFloat(sku[0].sellPrice);
   if (sellPrice === 0) return { totalCogs, grossMargin: null };
