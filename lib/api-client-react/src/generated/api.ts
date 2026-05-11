@@ -2776,8 +2776,8 @@ export const retireSkuPrintingBlockConfig = async (
   id: number,
   retireSkuPrintingBlockConfigBody: RetireSkuPrintingBlockConfigBody,
   options?: RequestInit,
-): Promise<SkuPrintingBlockConfig> => {
-  return customFetch<SkuPrintingBlockConfig>(getRetireSkuPrintingBlockConfigUrl(id), {
+): Promise<SkuWithMargin> => {
+  return customFetch<SkuWithMargin>(getRetireSkuPrintingBlockConfigUrl(id), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
