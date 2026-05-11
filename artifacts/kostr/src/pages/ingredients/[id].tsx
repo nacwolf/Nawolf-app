@@ -10,10 +10,12 @@ import {
   useUpdateIngredientPrice,
   useEditIngredientPrice,
   useDeleteIngredientPrice,
+  useListIngredientSubcategories,
   getGetIngredientQueryKey,
   getGetIngredientPriceHistoryQueryKey,
   getListIngredientAttachmentsQueryKey,
 } from "@workspace/api-client-react";
+import { SubCategoryCombobox } from "@/components/SubCategoryCombobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -98,6 +100,8 @@ export default function IngredientDetail({ id }: { id: string }) {
   const { data: attachments, isLoading: loadingAttachments } = useListIngredientAttachments(ingredientId, {
     query: { enabled: !isNaN(ingredientId) }
   });
+
+  const { data: subcategoryOptions = [] } = useListIngredientSubcategories();
 
   const updateIngredient = useUpdateIngredient();
   const updatePrice = useUpdateIngredientPrice();
@@ -398,7 +402,13 @@ export default function IngredientDetail({ id }: { id: string }) {
                 <FormField control={editForm.control} name="subCategory" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sub-category</FormLabel>
-                    <FormControl><Input placeholder="e.g. chips, sauce mix" {...field} value={field.value || ""} /></FormControl>
+                    <FormControl>
+                      <SubCategoryCombobox
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        options={subcategoryOptions}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

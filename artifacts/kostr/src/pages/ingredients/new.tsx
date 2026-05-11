@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/queryClient";
+import { useListIngredientSubcategories } from "@workspace/api-client-react";
+import { SubCategoryCombobox } from "@/components/SubCategoryCombobox";
 
 const INGREDIENT_CATEGORIES = ["Raw Materials", "Packaging", "Quality & Compliance", "Delivery"] as const;
 const UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
@@ -47,6 +49,7 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
   const [isSaving, setIsSaving] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const { data: subcategoryOptions = [] } = useListIngredientSubcategories();
 
   const form = useForm<FormData>({
     resolver: zodResolver(newIngredientSchema),
@@ -212,7 +215,13 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
                 <FormField control={form.control} name="subCategory" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sub-category <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                    <FormControl><Input placeholder="e.g. chips, sauce mix, seeds" {...field} value={field.value || ""} /></FormControl>
+                    <FormControl>
+                      <SubCategoryCombobox
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        options={subcategoryOptions}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

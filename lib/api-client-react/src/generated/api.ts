@@ -717,6 +717,85 @@ export const useDeleteIngredientPrice = <
 };
 
 /**
+ * @summary List distinct ingredient sub-categories sorted A-Z
+ */
+export const getListIngredientSubcategoriesUrl = () => {
+  return `/api/ingredients/subcategories`;
+};
+
+export const listIngredientSubcategories = async (
+  options?: RequestInit,
+): Promise<string[]> => {
+  return customFetch<string[]>(getListIngredientSubcategoriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListIngredientSubcategoriesQueryKey = () => {
+  return [`/api/ingredients/subcategories`] as const;
+};
+
+export const getListIngredientSubcategoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listIngredientSubcategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listIngredientSubcategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListIngredientSubcategoriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listIngredientSubcategories>>
+  > = ({ signal }) => listIngredientSubcategories({ signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listIngredientSubcategories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListIngredientSubcategoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listIngredientSubcategories>>
+>;
+export type ListIngredientSubcategoriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List distinct ingredient sub-categories sorted A-Z
+ */
+export function useListIngredientSubcategories<
+  TData = Awaited<ReturnType<typeof listIngredientSubcategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listIngredientSubcategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListIngredientSubcategoriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get price history for an ingredient
  */
 export const getGetIngredientPriceHistoryUrl = (id: number) => {

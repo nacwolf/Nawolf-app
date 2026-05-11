@@ -133,6 +133,19 @@ router.post("/ingredients", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+router.get("/ingredients/subcategories", requireAuth, async (_req, res): Promise<void> => {
+  const rows = await db
+    .selectDistinct({ subCategory: ingredientsTable.subCategory })
+    .from(ingredientsTable)
+    .orderBy(ingredientsTable.subCategory);
+
+  const subcategories = rows
+    .map(r => r.subCategory)
+    .filter((s): s is string => s != null && s.trim() !== "");
+
+  res.json(subcategories);
+});
+
 router.get("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
   const params = GetIngredientParams.safeParse({ id: req.params.id });
   if (!params.success) {

@@ -64,6 +64,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Ingredient"
 
+  /ingredients/subcategories:
+    get:
+      operationId: listIngredientSubcategories
+      tags: [ingredients]
+      summary: List distinct ingredient sub-categories sorted A-Z
+      responses:
+        "200":
+          description: Array of distinct sub-category strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
   /ingredients/{id}:
     get:
       operationId: getIngredient

@@ -72,6 +72,11 @@ export const CreateIngredientBody = zod.object({
 });
 
 /**
+ * @summary List distinct ingredient sub-categories sorted A-Z
+ */
+export const ListIngredientSubcategoriesResponse = zod.array(zod.string());
+
+/**
  * @summary Get ingredient by ID
  */
 export const GetIngredientParams = zod.object({
