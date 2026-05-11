@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetSkuPrintingBlockConfig,
+  useListSkuPrintingBlockConfigs,
   useSetSkuPrintingBlockConfig,
   useRetireSkuPrintingBlockConfig,
   useDeleteSkuPrintingBlockConfig,
   useListPrintingBlockSuppliers,
   getGetSkuQueryKey,
+  getGetSkuPrintingBlockConfigQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,8 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Printer, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
+import { Printer, ChevronDown, ChevronUp, Loader2, Trash2, History } from "lucide-react";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 
 interface PrintingBlockPanelProps {
@@ -44,12 +46,19 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
   const [numBlocks, setNumBlocks] = useState<string>("");
   const [moq, setMoq] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const { data: activeConfig, isLoading } = useGetSkuPrintingBlockConfig(skuId);
+  const { data: configHistory } = useListSkuPrintingBlockConfigs(skuId);
   const { data: suppliers } = useListPrintingBlockSuppliers();
   const setConfig = useSetSkuPrintingBlockConfig();
   const retireConfig = useRetireSkuPrintingBlockConfig();
   const deleteConfig = useDeleteSkuPrintingBlockConfig();
+
+  function invalidateAll() {
+    qc.invalidateQueries({ queryKey: getGetSkuPrintingBlockConfigQueryKey(skuId) });
+    qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+  }
 
   function openConfigForm() {
     if (activeConfig) {
@@ -76,7 +85,7 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
     setIsSaving(true);
     try {
       await setConfig.mutateAsync({ id: skuId, data: { supplierId: sid, numBlocks: nb, moq: m } });
-      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      invalidateAll();
       setShowConfigForm(false);
       toast({ title: "Printing block configured — COGS updated" });
     } catch {
@@ -89,7 +98,7 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
   async function handleRetire() {
     try {
       const result = await retireConfig.mutateAsync({ id: skuId, data: { reason: retireReason || null } });
-      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      invalidateAll();
       setIsRetireOpen(false);
       setRetireReason("");
       const marginStr = result.grossMargin != null ? `New margin: ${(result.grossMargin * 100).toFixed(1)}%` : undefined;
@@ -103,7 +112,7 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
     if (!confirm("Remove this printing block config entirely? This will recalculate COGS.")) return;
     try {
       const result = await deleteConfig.mutateAsync({ id: skuId });
-      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      invalidateAll();
       const marginStr = result.grossMargin != null ? `New margin: ${(result.grossMargin * 100).toFixed(1)}%` : undefined;
       toast({ title: "Block config removed", description: marginStr });
     } catch {
@@ -112,15 +121,22 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
   }
 
   const hasActiveConfig = !!activeConfig;
-  const amortizedCost = activeConfig
-    ? (activeConfig.numBlocks * activeConfig.pricePerBlock) / activeConfig.moq
-    : null;
+  const retiredConfigs = (configHistory ?? []).filter(c => c.status === "retired");
+  const lastRetired = retiredConfigs[0] ?? null;
 
   const previewSupplier = suppliers?.find(s => s.id === parseInt(selectedSupplierId, 10));
   const previewCost =
     previewSupplier && numBlocks && moq
       ? (parseInt(numBlocks, 10) * previewSupplier.pricePerBlock) / parseInt(moq, 10)
       : null;
+
+  const headerSubtitle = isLoading
+    ? "Loading..."
+    : hasActiveConfig
+    ? `${activeConfig.numBlocks} blocks · ${activeConfig.supplierName} · amortized over ${activeConfig.moq.toLocaleString()} units`
+    : lastRetired
+    ? `Retired on ${formatDate(lastRetired.retiredAt ?? "")} — click to reconfigure`
+    : "No active block config — click to configure";
 
   return (
     <>
@@ -133,19 +149,18 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
             <Printer className="w-4 h-4 text-purple-600 flex-shrink-0" />
             <div className="text-left">
               <div className="text-sm font-bold uppercase tracking-wider text-purple-700">Printing Blocks</div>
-              <div className="text-xs text-muted-foreground mt-0.5">
-                {isLoading
-                  ? "Loading..."
-                  : hasActiveConfig
-                  ? `${activeConfig.numBlocks} blocks · ${activeConfig.supplierName} · amortized over ${activeConfig.moq.toLocaleString()} units`
-                  : "No active block config — click to configure"}
-              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">{headerSubtitle}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {hasActiveConfig && amortizedCost != null && (
+            {hasActiveConfig && (
               <Badge className="bg-purple-100 text-purple-800 border-0 text-xs">
-                {formatCurrency(amortizedCost)}/unit
+                {formatCurrency(activeConfig.amortizedCostPerUnit)}/unit
+              </Badge>
+            )}
+            {!hasActiveConfig && lastRetired && (
+              <Badge variant="outline" className="text-amber-700 border-amber-300 text-xs">
+                Retired
               </Badge>
             )}
             {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -179,7 +194,9 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Amortized cost</div>
-                      <div className="text-base font-bold text-purple-700">{formatCurrency(amortizedCost)}/unit</div>
+                      <div className="text-base font-bold text-purple-700">
+                        {formatCurrency(activeConfig.amortizedCostPerUnit)}/unit
+                      </div>
                       <div className="text-[10px] text-muted-foreground">
                         Printing Blocks (amortized over {activeConfig.moq.toLocaleString()} units)
                       </div>
@@ -213,17 +230,29 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
               </>
             ) : (
               !showConfigForm && (
-                <div className="text-center py-4 space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    No printing block config yet. Add one to include the amortized block cost in COGS.
-                  </p>
-                  {(suppliers?.length ?? 0) === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      First add a supplier in the Cost Library.
+                <div className="space-y-3">
+                  {lastRetired ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-1">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                        Retired on {formatDate(lastRetired.retiredAt ?? "")}
+                      </div>
+                      {lastRetired.retiredReason && (
+                        <div className="text-xs text-muted-foreground italic">{lastRetired.retiredReason}</div>
+                      )}
+                      <div className="text-xs text-muted-foreground">
+                        Was: {lastRetired.numBlocks} blocks · {lastRetired.moq.toLocaleString()} unit MOQ
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No printing block config yet. Add one to include the amortized block cost in COGS.
                     </p>
+                  )}
+                  {(suppliers?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-muted-foreground">First add a supplier in the Cost Library.</p>
                   ) : (
                     <Button size="sm" onClick={openConfigForm}>
-                      Configure printing blocks
+                      {lastRetired ? "Add new block config" : "Configure printing blocks"}
                     </Button>
                   )}
                 </div>
@@ -297,6 +326,48 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
                     Cancel
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {retiredConfigs.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setShowHistory(h => !h)}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  {showHistory ? "Hide" : "Show"} block history ({retiredConfigs.length} retired)
+                </button>
+                {showHistory && (
+                  <div className="mt-3 border rounded-lg overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium text-muted-foreground">Supplier</th>
+                          <th className="text-right px-3 py-2 font-medium text-muted-foreground">Blocks</th>
+                          <th className="text-right px-3 py-2 font-medium text-muted-foreground">MOQ</th>
+                          <th className="text-left px-3 py-2 font-medium text-muted-foreground">Retired</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {retiredConfigs.map(c => (
+                          <tr key={c.id}>
+                            <td className="px-3 py-2 font-medium">{(c as any).supplierName ?? `Supplier #${c.supplierId}`}</td>
+                            <td className="px-3 py-2 text-right">{c.numBlocks}</td>
+                            <td className="px-3 py-2 text-right">{c.moq.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {c.retiredAt ? formatDate(c.retiredAt) : "—"}
+                              {c.retiredReason && (
+                                <span className="block italic text-[10px]">{c.retiredReason}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

@@ -6,6 +6,7 @@ import {
   useCreatePrintingBlockSupplier,
   useUpdatePrintingBlockSupplier,
   useDeletePrintingBlockSupplier,
+  getListPrintingBlockSuppliersQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -176,6 +177,7 @@ export default function CostLibrary() {
         await createSupplier.mutateAsync({ data: { name: data.name, pricePerBlock: data.pricePerBlock, notes: data.notes || null } });
         toast({ title: "Supplier added" });
       }
+      qc.invalidateQueries({ queryKey: getListPrintingBlockSuppliersQueryKey() });
       setAddSupplierOpen(false);
       setEditingSupplier(null);
       supplierForm.reset({ name: "", pricePerBlock: 0, notes: "" });
@@ -187,9 +189,11 @@ export default function CostLibrary() {
   async function handleDeleteSupplier(id: number) {
     try {
       await deleteSupplier.mutateAsync({ id });
+      qc.invalidateQueries({ queryKey: getListPrintingBlockSuppliersQueryKey() });
       toast({ title: "Supplier deleted" });
-    } catch (err: any) {
-      if (err?.response?.status === 409 || String(err).includes("409") || String(err?.message).includes("active")) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("409") || msg.includes("active")) {
         toast({ variant: "destructive", title: "Supplier in use", description: "Remove all active block configs that use this supplier first." });
       } else {
         toast({ variant: "destructive", title: "Failed to delete supplier" });
