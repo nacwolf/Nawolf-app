@@ -28,6 +28,4 @@ export interface CreateIngredientBody {
   priceTier2Description?: string | null;
   /** @nullable */
   notes?: string | null;
-  /** @nullable */
-  createdBy?: string | null;
 }

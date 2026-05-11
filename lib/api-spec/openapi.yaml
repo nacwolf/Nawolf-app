@@ -602,6 +602,10 @@ components:
           type: ["number", "null"]
         priceChangePct:
           type: ["number", "null"]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientAttachment"
       required:
         - id
         - name
@@ -697,8 +701,6 @@ components:
         priceTier2Description:
           type: ["string", "null"]
         notes:
-          type: ["string", "null"]
-        createdBy:
           type: ["string", "null"]
       required:
         - name

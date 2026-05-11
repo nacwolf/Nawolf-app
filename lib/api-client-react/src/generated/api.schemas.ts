@@ -39,6 +39,18 @@ export interface Ingredient {
   createdAt: string;
 }
 
+export interface IngredientAttachment {
+  id: number;
+  ingredientId: number;
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileType?: string | null;
+  /** @nullable */
+  uploadedBy?: string | null;
+  uploadedAt: string;
+}
+
 export interface IngredientWithPrice {
   id: number;
   name: string;
@@ -72,6 +84,7 @@ export interface IngredientWithPrice {
   previousPrice?: number | null;
   /** @nullable */
   priceChangePct?: number | null;
+  attachments?: IngredientAttachment[];
 }
 
 export interface IngredientPrice {
@@ -84,18 +97,6 @@ export interface IngredientPrice {
   /** @nullable */
   loggedBy?: string | null;
   createdAt: string;
-}
-
-export interface IngredientAttachment {
-  id: number;
-  ingredientId: number;
-  fileName: string;
-  objectPath: string;
-  /** @nullable */
-  fileType?: string | null;
-  /** @nullable */
-  uploadedBy?: string | null;
-  uploadedAt: string;
 }
 
 export interface CreateIngredientAttachmentBody {
@@ -127,8 +128,6 @@ export interface CreateIngredientBody {
   priceTier2Description?: string | null;
   /** @nullable */
   notes?: string | null;
-  /** @nullable */
-  createdBy?: string | null;
 }
 
 export interface UpdateIngredientBody {

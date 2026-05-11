@@ -37,6 +37,19 @@ export const ListIngredientsResponseItem = zod.object({
   skuCount: zod.number(),
   previousPrice: zod.number().nullish(),
   priceChangePct: zod.number().nullish(),
+  attachments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        ingredientId: zod.number(),
+        fileName: zod.string(),
+        objectPath: zod.string(),
+        fileType: zod.string().nullish(),
+        uploadedBy: zod.string().nullish(),
+        uploadedAt: zod.string(),
+      }),
+    )
+    .optional(),
 });
 export const ListIngredientsResponse = zod.array(ListIngredientsResponseItem);
 
@@ -56,7 +69,6 @@ export const CreateIngredientBody = zod.object({
   priceTier2: zod.number().nullish(),
   priceTier2Description: zod.string().nullish(),
   notes: zod.string().nullish(),
-  createdBy: zod.string().nullish(),
 });
 
 /**
@@ -86,6 +98,19 @@ export const GetIngredientResponse = zod.object({
   skuCount: zod.number(),
   previousPrice: zod.number().nullish(),
   priceChangePct: zod.number().nullish(),
+  attachments: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        ingredientId: zod.number(),
+        fileName: zod.string(),
+        objectPath: zod.string(),
+        fileType: zod.string().nullish(),
+        uploadedBy: zod.string().nullish(),
+        uploadedAt: zod.string(),
+      }),
+    )
+    .optional(),
 });
 
 /**

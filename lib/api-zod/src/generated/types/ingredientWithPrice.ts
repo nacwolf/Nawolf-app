@@ -5,6 +5,7 @@
  * Kostr API - food manufacturer cost and margin tracking
  * OpenAPI spec version: 0.1.0
  */
+import type { IngredientAttachment } from "./ingredientAttachment";
 
 export interface IngredientWithPrice {
   id: number;
@@ -39,4 +40,5 @@ export interface IngredientWithPrice {
   previousPrice?: number | null;
   /** @nullable */
   priceChangePct?: number | null;
+  attachments?: IngredientAttachment[];
 }

@@ -117,7 +117,6 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
         priceTier2: data.priceTier2 ?? null,
         priceTier2Description: data.priceTier2Description || null,
         notes: data.notes || null,
-        createdBy: user?.fullName || user?.username || user?.id || null,
       };
 
       const res = await fetch(getApiUrl("/ingredients"), {

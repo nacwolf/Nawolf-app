@@ -1,6 +1,14 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql } from "drizzle-orm";
-import { db, ingredientsTable, ingredientPricesTable, costLinesTable, skusTable, ingredientAttachmentsTable } from "@workspace/db";
+import {
+  db,
+  ingredientsTable,
+  ingredientPricesTable,
+  costLinesTable,
+  skusTable,
+  ingredientAttachmentsTable,
+  ingredientTierPriceHistoryTable,
+} from "@workspace/db";
 import {
   CreateIngredientBody,
   GetIngredientParams,
@@ -70,16 +78,17 @@ router.post("/ingredients", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const auth = getAuth(req);
   const { initialPrice, ...ingredientData } = parsed.data;
 
   const [ingredient] = await db.insert(ingredientsTable).values({
     ...ingredientData,
+    createdBy: auth?.userId ?? null,
     priceTier1: ingredientData.priceTier1 != null ? String(ingredientData.priceTier1) : null,
     priceTier2: ingredientData.priceTier2 != null ? String(ingredientData.priceTier2) : null,
   }).returning();
 
   if (initialPrice != null) {
-    const auth = getAuth(req);
     const today = new Date().toISOString().split("T")[0];
     await db.insert(ingredientPricesTable).values({
       ingredientId: ingredient.id,
@@ -87,6 +96,30 @@ router.post("/ingredients", requireAuth, async (req, res): Promise<void> => {
       effectiveDate: today,
       reason: "Initial price",
       loggedBy: auth?.userId ?? null,
+    });
+  }
+
+  if (ingredientData.priceTier1 != null) {
+    await db.insert(ingredientTierPriceHistoryTable).values({
+      ingredientId: ingredient.id,
+      tier: "tier1",
+      oldPrice: null,
+      newPrice: String(ingredientData.priceTier1),
+      oldDescription: null,
+      newDescription: ingredientData.priceTier1Description ?? null,
+      changedBy: auth?.userId ?? null,
+    });
+  }
+
+  if (ingredientData.priceTier2 != null) {
+    await db.insert(ingredientTierPriceHistoryTable).values({
+      ingredientId: ingredient.id,
+      tier: "tier2",
+      oldPrice: null,
+      newPrice: String(ingredientData.priceTier2),
+      oldDescription: null,
+      newDescription: ingredientData.priceTier2Description ?? null,
+      changedBy: auth?.userId ?? null,
     });
   }
 
@@ -110,19 +143,25 @@ router.get("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const currentPrice = await getCurrentPrice(ingredient.id);
-
-  const priceRows = await db
-    .select({ effectiveDate: ingredientPricesTable.effectiveDate, price: ingredientPricesTable.price })
-    .from(ingredientPricesTable)
-    .where(eq(ingredientPricesTable.ingredientId, ingredient.id))
-    .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-    .limit(2);
-
-  const [countRow] = await db
-    .select({ count: sql<number>`count(distinct ${costLinesTable.skuId})` })
-    .from(costLinesTable)
-    .where(eq(costLinesTable.ingredientId, ingredient.id));
+  const [currentPrice, priceRows, countRow, attachments] = await Promise.all([
+    getCurrentPrice(ingredient.id),
+    db
+      .select({ effectiveDate: ingredientPricesTable.effectiveDate, price: ingredientPricesTable.price })
+      .from(ingredientPricesTable)
+      .where(eq(ingredientPricesTable.ingredientId, ingredient.id))
+      .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
+      .limit(2),
+    db
+      .select({ count: sql<number>`count(distinct ${costLinesTable.skuId})` })
+      .from(costLinesTable)
+      .where(eq(costLinesTable.ingredientId, ingredient.id))
+      .then(r => r[0]),
+    db
+      .select()
+      .from(ingredientAttachmentsTable)
+      .where(eq(ingredientAttachmentsTable.ingredientId, ingredient.id))
+      .orderBy(desc(ingredientAttachmentsTable.uploadedAt)),
+  ]);
 
   const previousPrice = priceRows[1] ? parseFloat(priceRows[1].price) : null;
   const priceChangePct =
@@ -139,6 +178,7 @@ router.get("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
     skuCount: Number(countRow?.count ?? 0),
     previousPrice,
     priceChangePct,
+    attachments,
   });
 });
 
@@ -165,6 +205,7 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  const auth = getAuth(req);
   const { name, supplier, subCategory, description, priceTier1, priceTier1Description, priceTier2, priceTier2Description, notes } = req.body;
 
   const updateData: Record<string, any> = {};
@@ -178,11 +219,43 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
   if (supplier !== undefined) updateData.supplier = supplier?.trim() || null;
   if (subCategory !== undefined) updateData.subCategory = subCategory?.trim() || null;
   if (description !== undefined) updateData.description = description?.trim() || null;
-  if (priceTier1 !== undefined) updateData.priceTier1 = priceTier1 != null ? String(priceTier1) : null;
-  if (priceTier1Description !== undefined) updateData.priceTier1Description = priceTier1Description || null;
-  if (priceTier2 !== undefined) updateData.priceTier2 = priceTier2 != null ? String(priceTier2) : null;
-  if (priceTier2Description !== undefined) updateData.priceTier2Description = priceTier2Description || null;
   if (notes !== undefined) updateData.notes = notes || null;
+
+  const [current] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, id));
+  if (!current) {
+    res.status(404).json({ error: "Ingredient not found" });
+    return;
+  }
+
+  const tierChanges: Array<{ tier: string; oldPrice: string | null; newPrice: string | null; oldDesc: string | null; newDesc: string | null }> = [];
+
+  if (priceTier1 !== undefined) {
+    const newVal = priceTier1 != null ? String(priceTier1) : null;
+    const oldVal = current.priceTier1;
+    if (oldVal !== newVal) {
+      tierChanges.push({ tier: "tier1", oldPrice: oldVal, newPrice: newVal, oldDesc: current.priceTier1Description, newDesc: priceTier1Description ?? current.priceTier1Description ?? null });
+    }
+    updateData.priceTier1 = newVal;
+  }
+  if (priceTier1Description !== undefined && priceTier1 === undefined) {
+    updateData.priceTier1Description = priceTier1Description || null;
+  } else if (priceTier1Description !== undefined) {
+    updateData.priceTier1Description = priceTier1Description || null;
+  }
+
+  if (priceTier2 !== undefined) {
+    const newVal = priceTier2 != null ? String(priceTier2) : null;
+    const oldVal = current.priceTier2;
+    if (oldVal !== newVal) {
+      tierChanges.push({ tier: "tier2", oldPrice: oldVal, newPrice: newVal, oldDesc: current.priceTier2Description, newDesc: priceTier2Description ?? current.priceTier2Description ?? null });
+    }
+    updateData.priceTier2 = newVal;
+  }
+  if (priceTier2Description !== undefined && priceTier2 === undefined) {
+    updateData.priceTier2Description = priceTier2Description || null;
+  } else if (priceTier2Description !== undefined) {
+    updateData.priceTier2Description = priceTier2Description || null;
+  }
 
   const [updated] = await db
     .update(ingredientsTable)
@@ -193,6 +266,20 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
   if (!updated) {
     res.status(404).json({ error: "Ingredient not found" });
     return;
+  }
+
+  if (tierChanges.length > 0) {
+    await db.insert(ingredientTierPriceHistoryTable).values(
+      tierChanges.map(tc => ({
+        ingredientId: id,
+        tier: tc.tier,
+        oldPrice: tc.oldPrice,
+        newPrice: tc.newPrice,
+        oldDescription: tc.oldDesc,
+        newDescription: tc.newDesc,
+        changedBy: auth?.userId ?? null,
+      }))
+    );
   }
 
   res.json({
@@ -262,6 +349,28 @@ router.get("/ingredients/:id/price-history", requireAuth, async (req, res): Prom
     history.map((h) => ({
       ...h,
       price: parseFloat(h.price),
+    }))
+  );
+});
+
+router.get("/ingredients/:id/tier-price-history", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ingredient id" });
+    return;
+  }
+
+  const history = await db
+    .select()
+    .from(ingredientTierPriceHistoryTable)
+    .where(eq(ingredientTierPriceHistoryTable.ingredientId, id))
+    .orderBy(desc(ingredientTierPriceHistoryTable.changedAt));
+
+  res.json(
+    history.map(h => ({
+      ...h,
+      oldPrice: h.oldPrice ? parseFloat(h.oldPrice) : null,
+      newPrice: h.newPrice ? parseFloat(h.newPrice) : null,
     }))
   );
 });

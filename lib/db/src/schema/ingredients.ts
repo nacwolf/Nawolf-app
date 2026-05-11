@@ -39,6 +39,18 @@ export const ingredientAttachmentsTable = pgTable("ingredient_attachments", {
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const ingredientTierPriceHistoryTable = pgTable("ingredient_tier_price_history", {
+  id: serial("id").primaryKey(),
+  ingredientId: integer("ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  tier: text("tier").notNull(),
+  oldPrice: numeric("old_price", { precision: 12, scale: 4 }),
+  newPrice: numeric("new_price", { precision: 12, scale: 4 }),
+  oldDescription: text("old_description"),
+  newDescription: text("new_description"),
+  changedBy: text("changed_by"),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertIngredientSchema = createInsertSchema(ingredientsTable).omit({ id: true, createdAt: true });
 export type InsertIngredient = z.infer<typeof insertIngredientSchema>;
 export type Ingredient = typeof ingredientsTable.$inferSelect;
@@ -50,3 +62,7 @@ export type IngredientPrice = typeof ingredientPricesTable.$inferSelect;
 export const insertIngredientAttachmentSchema = createInsertSchema(ingredientAttachmentsTable).omit({ id: true, uploadedAt: true });
 export type InsertIngredientAttachment = z.infer<typeof insertIngredientAttachmentSchema>;
 export type IngredientAttachment = typeof ingredientAttachmentsTable.$inferSelect;
+
+export const insertIngredientTierPriceHistorySchema = createInsertSchema(ingredientTierPriceHistoryTable).omit({ id: true, changedAt: true });
+export type InsertIngredientTierPriceHistory = z.infer<typeof insertIngredientTierPriceHistorySchema>;
+export type IngredientTierPriceHistory = typeof ingredientTierPriceHistoryTable.$inferSelect;
