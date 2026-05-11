@@ -2843,3 +2843,78 @@ export const useRetireSkuPrintingBlockConfig = <
 > => {
   return useMutation(getRetireSkuPrintingBlockConfigMutationOptions(options));
 };
+
+/**
+ * @summary Delete (retire) the active printing block config for a SKU
+ */
+export const getDeleteSkuPrintingBlockConfigUrl = (id: number) => {
+  return `/api/skus/${id}/printing-block-config`;
+};
+
+export const deleteSkuPrintingBlockConfig = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SkuWithMargin> => {
+  return customFetch<SkuWithMargin>(getDeleteSkuPrintingBlockConfigUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSkuPrintingBlockConfigMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSkuPrintingBlockConfig>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSkuPrintingBlockConfig>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteSkuPrintingBlockConfig"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSkuPrintingBlockConfig>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return deleteSkuPrintingBlockConfig(id, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSkuPrintingBlockConfigMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSkuPrintingBlockConfig>>
+>;
+export type DeleteSkuPrintingBlockConfigMutationError = ErrorType<ErrorResponse>;
+
+export const useDeleteSkuPrintingBlockConfig = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSkuPrintingBlockConfig>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSkuPrintingBlockConfig>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteSkuPrintingBlockConfigMutationOptions(options));
+};

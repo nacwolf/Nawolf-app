@@ -724,6 +724,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSkuPrintingBlockConfig
+      tags: [printingBlocks]
+      summary: Delete (retire) the active printing block config for a SKU
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated SKU with recalculated COGS/margin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SkuWithMargin"
+        "404":
+          description: SKU or active config not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /skus/{id}/printing-block-config/retire:
     post:
@@ -744,11 +767,11 @@ paths:
               $ref: "#/components/schemas/RetireSkuPrintingBlockConfigBody"
       responses:
         "200":
-          description: Retired config
+          description: Updated SKU with recalculated COGS/margin
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SkuPrintingBlockConfig"
+                $ref: "#/components/schemas/SkuWithMargin"
         "404":
           description: SKU or active config not found
           content:

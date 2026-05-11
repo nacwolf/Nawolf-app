@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
 import { db, skusTable, printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
-import { snapshotSku } from "../lib/kostr";
+import { snapshotSku, getSkuWithMargin } from "../lib/kostr";
 
 const router: IRouter = Router();
 
@@ -319,7 +319,7 @@ router.post("/skus/:id/printing-block-config/retire", requireAuth, async (req, r
   }
 
   const now = new Date();
-  const [retired] = await db
+  await db
     .update(skuPrintingBlockConfigsTable)
     .set({
       status: "retired",
@@ -327,12 +327,50 @@ router.post("/skus/:id/printing-block-config/retire", requireAuth, async (req, r
       retiredReason: reason?.trim() || null,
       retiredBy: auth?.userId ?? null,
     })
-    .where(eq(skuPrintingBlockConfigsTable.id, activeConfig.id))
-    .returning();
+    .where(eq(skuPrintingBlockConfigsTable.id, activeConfig.id));
 
   await snapshotSku(skuId, `printing_block_config_retired:sku_${skuId}`);
 
-  res.json(parseConfig(retired));
+  const skuWithMargin = await getSkuWithMargin(skuId);
+  res.json(skuWithMargin ?? { id: skuId, totalCogs: null, grossMargin: null, status: "unknown" });
+});
+
+router.delete("/skus/:id/printing-block-config", requireAuth, async (req, res): Promise<void> => {
+  const skuId = parseInt(req.params.id, 10);
+  if (isNaN(skuId)) {
+    res.status(400).json({ error: "Invalid SKU id" });
+    return;
+  }
+
+  const auth = getAuth(req);
+
+  const [sku] = await db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.id, skuId)).limit(1);
+  if (!sku) {
+    res.status(404).json({ error: "SKU not found" });
+    return;
+  }
+
+  const [activeConfig] = await db
+    .select()
+    .from(skuPrintingBlockConfigsTable)
+    .where(and(eq(skuPrintingBlockConfigsTable.skuId, skuId), eq(skuPrintingBlockConfigsTable.status, "active")))
+    .limit(1);
+
+  if (!activeConfig) {
+    res.status(404).json({ error: "No active printing block config found for this SKU" });
+    return;
+  }
+
+  const now = new Date();
+  await db
+    .update(skuPrintingBlockConfigsTable)
+    .set({ status: "retired", retiredAt: now, retiredBy: auth?.userId ?? null, retiredReason: "deleted" })
+    .where(eq(skuPrintingBlockConfigsTable.id, activeConfig.id));
+
+  await snapshotSku(skuId, `printing_block_config_deleted:sku_${skuId}`);
+
+  const skuWithMargin = await getSkuWithMargin(skuId);
+  res.json(skuWithMargin ?? { id: skuId, totalCogs: null, grossMargin: null, status: "unknown" });
 });
 
 export default router;
