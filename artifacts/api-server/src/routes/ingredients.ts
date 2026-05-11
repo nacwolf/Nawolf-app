@@ -339,62 +339,60 @@ router.post("/ingredients/:id/price", requireAuth, async (req, res): Promise<voi
   }
 
   const auth = getAuth(req);
-  const [ingredientPrice] = await db
-    .insert(ingredientPricesTable)
-    .values({
-      ingredientId: params.data.id,
-      price: parsed.data.price.toFixed(4),
-      effectiveDate: parsed.data.effectiveDate,
-      reason: parsed.data.reason ?? null,
-      loggedBy: auth?.userId ?? null,
-    })
-    .returning();
 
-  if (parsed.data.priceTier1 !== undefined || parsed.data.priceTier2 !== undefined) {
-    const tierChanges: Array<{ tier: string; oldPrice: string | null; newPrice: string | null; oldDesc: string | null; newDesc: string | null }> = [];
+  const hasTierUpdates = parsed.data.priceTier1 !== undefined || parsed.data.priceTier2 !== undefined;
 
-    if (parsed.data.priceTier1 !== undefined) {
-      tierChanges.push({
-        tier: "tier1",
-        oldPrice: ingredient.priceTier1 ?? null,
-        newPrice: parsed.data.priceTier1 != null ? parsed.data.priceTier1.toFixed(4) : null,
-        oldDesc: ingredient.priceTier1Description ?? null,
-        newDesc: ingredient.priceTier1Description ?? null,
-      });
-    }
+  const newTier1 = parsed.data.priceTier1 !== undefined
+    ? (parsed.data.priceTier1 != null ? parsed.data.priceTier1.toFixed(4) : null)
+    : undefined;
+  const newTier2 = parsed.data.priceTier2 !== undefined
+    ? (parsed.data.priceTier2 != null ? parsed.data.priceTier2.toFixed(4) : null)
+    : undefined;
 
-    if (parsed.data.priceTier2 !== undefined) {
-      tierChanges.push({
-        tier: "tier2",
-        oldPrice: ingredient.priceTier2 ?? null,
-        newPrice: parsed.data.priceTier2 != null ? parsed.data.priceTier2.toFixed(4) : null,
-        oldDesc: ingredient.priceTier2Description ?? null,
-        newDesc: ingredient.priceTier2Description ?? null,
-      });
-    }
-
-    await db
-      .update(ingredientsTable)
-      .set({
-        ...(parsed.data.priceTier1 !== undefined ? { priceTier1: parsed.data.priceTier1 != null ? parsed.data.priceTier1.toFixed(4) : null } : {}),
-        ...(parsed.data.priceTier2 !== undefined ? { priceTier2: parsed.data.priceTier2 != null ? parsed.data.priceTier2.toFixed(4) : null } : {}),
-      })
-      .where(eq(ingredientsTable.id, params.data.id));
-
-    if (tierChanges.length > 0) {
-      await db.insert(ingredientTierPriceHistoryTable).values(
-        tierChanges.map(tc => ({
-          ingredientId: params.data.id,
-          tier: tc.tier,
-          oldPrice: tc.oldPrice,
-          newPrice: tc.newPrice,
-          oldDescription: tc.oldDesc,
-          newDescription: tc.newDesc,
-          changedBy: auth?.userId ?? null,
-        }))
-      );
-    }
+  const tierChanges: Array<{ tier: string; oldPrice: string | null; newPrice: string | null }> = [];
+  if (newTier1 !== undefined && newTier1 !== (ingredient.priceTier1 ?? null)) {
+    tierChanges.push({ tier: "tier1", oldPrice: ingredient.priceTier1 ?? null, newPrice: newTier1 });
   }
+  if (newTier2 !== undefined && newTier2 !== (ingredient.priceTier2 ?? null)) {
+    tierChanges.push({ tier: "tier2", oldPrice: ingredient.priceTier2 ?? null, newPrice: newTier2 });
+  }
+
+  const ingredientPrice = await db.transaction(async (tx) => {
+    const [priceRow] = await tx
+      .insert(ingredientPricesTable)
+      .values({
+        ingredientId: params.data.id,
+        price: parsed.data.price.toFixed(4),
+        effectiveDate: parsed.data.effectiveDate,
+        reason: parsed.data.reason ?? null,
+        loggedBy: auth?.userId ?? null,
+      })
+      .returning();
+
+    if (hasTierUpdates) {
+      await tx
+        .update(ingredientsTable)
+        .set({
+          ...(newTier1 !== undefined ? { priceTier1: newTier1 } : {}),
+          ...(newTier2 !== undefined ? { priceTier2: newTier2 } : {}),
+        })
+        .where(eq(ingredientsTable.id, params.data.id));
+
+      if (tierChanges.length > 0) {
+        await tx.insert(ingredientTierPriceHistoryTable).values(
+          tierChanges.map(tc => ({
+            ingredientId: params.data.id,
+            tier: tc.tier,
+            oldPrice: tc.oldPrice,
+            newPrice: tc.newPrice,
+            changedBy: auth?.userId ?? null,
+          }))
+        );
+      }
+    }
+
+    return priceRow;
+  });
 
   const triggeredBy = `price_update:ingredient_${params.data.id}`;
   const affectedSkuCount = await recalculateAllSkusUsingIngredient(params.data.id, triggeredBy);
