@@ -144,8 +144,17 @@ router.delete("/printing-block-suppliers/:id", requireAuth, async (req, res): Pr
     return;
   }
 
-  await db.delete(printingBlockSuppliersTable).where(eq(printingBlockSuppliersTable.id, id));
-  res.status(204).send();
+  try {
+    await db.delete(printingBlockSuppliersTable).where(eq(printingBlockSuppliersTable.id, id));
+    res.status(204).send();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("foreign key") || msg.includes("violates")) {
+      res.status(409).json({ error: "Cannot delete supplier: it is referenced by existing configs" });
+    } else {
+      throw err;
+    }
+  }
 });
 
 router.get("/skus/:id/printing-block-configs", requireAuth, async (req, res): Promise<void> => {

@@ -1,7 +1,9 @@
-import { pgTable, serial, text, timestamp, numeric, integer, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, integer, date, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ingredientsTable } from "./ingredients";
+
+export const printingBlockConfigStatusEnum = pgEnum("printing_block_config_status", ["active", "retired"]);
 
 export const printingBlockSuppliersTable = pgTable("printing_block_suppliers", {
   id: serial("id").primaryKey(),
@@ -14,10 +16,10 @@ export const printingBlockSuppliersTable = pgTable("printing_block_suppliers", {
 export const skuPrintingBlockConfigsTable = pgTable("sku_printing_block_configs", {
   id: serial("id").primaryKey(),
   skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
-  supplierId: integer("supplier_id").notNull().references(() => printingBlockSuppliersTable.id, { onDelete: "restrict" }),
+  supplierId: integer("supplier_id").notNull().references(() => printingBlockSuppliersTable.id, { onDelete: "cascade" }),
   numBlocks: integer("num_blocks").notNull(),
   moq: integer("moq").notNull(),
-  status: text("status").notNull().default("active"),
+  status: printingBlockConfigStatusEnum("status").notNull().default("active"),
   retiredAt: timestamp("retired_at", { withTimezone: true }),
   retiredReason: text("retired_reason"),
   retiredBy: text("retired_by"),
