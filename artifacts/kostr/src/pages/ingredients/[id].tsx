@@ -8,10 +8,23 @@ import {
   useListIngredientAttachments,
   useUpdateIngredient,
   useUpdateIngredientPrice,
+  useEditIngredientPrice,
+  useDeleteIngredientPrice,
   getGetIngredientQueryKey,
+  getGetIngredientPriceHistoryQueryKey,
   getListIngredientAttachmentsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,7 +35,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Save, Upload, X, FileText, Loader2, Download, ExternalLink } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, FileText, Loader2, Download, ExternalLink, Pencil, Trash2, Check } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,6 +64,14 @@ const priceSchema = z.object({
   price: z.coerce.number().min(0.0001, "Price must be > 0"),
   effectiveDate: z.string().min(1, "Date required"),
   reason: z.string().optional(),
+  priceTier1: z.coerce.number().min(0).optional().nullable(),
+  priceTier2: z.coerce.number().min(0).optional().nullable(),
+});
+
+const editPriceSchema = z.object({
+  price: z.coerce.number().min(0.0001, "Price must be > 0"),
+  effectiveDate: z.string().min(1, "Date required"),
+  reason: z.string().optional(),
 });
 
 interface PendingFile { file: File; id: string; }
@@ -63,6 +84,8 @@ export default function IngredientDetail({ id }: { id: string }) {
   const qc = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
+  const [deletingPriceId, setDeletingPriceId] = useState<number | null>(null);
 
   const { data: ingredient, isLoading: loadingIng } = useGetIngredient(ingredientId, {
     query: { enabled: !isNaN(ingredientId) }
@@ -78,6 +101,8 @@ export default function IngredientDetail({ id }: { id: string }) {
 
   const updateIngredient = useUpdateIngredient();
   const updatePrice = useUpdateIngredientPrice();
+  const editPrice = useEditIngredientPrice();
+  const deletePrice = useDeleteIngredientPrice();
 
   const editForm = useForm<z.infer<typeof editSchema>>({
     resolver: zodResolver(editSchema),
@@ -125,6 +150,17 @@ export default function IngredientDetail({ id }: { id: string }) {
       price: 0,
       effectiveDate: new Date().toISOString().split("T")[0],
       reason: "",
+      priceTier1: null,
+      priceTier2: null,
+    },
+  });
+
+  const editPriceForm = useForm<z.infer<typeof editPriceSchema>>({
+    resolver: zodResolver(editPriceSchema),
+    defaultValues: {
+      price: 0,
+      effectiveDate: "",
+      reason: "",
     },
   });
 
@@ -150,15 +186,56 @@ export default function IngredientDetail({ id }: { id: string }) {
   }
 
   async function handleUpdatePrice(data: z.infer<typeof priceSchema>) {
-    const result = await updatePrice.mutateAsync({ id: ingredientId, data });
+    const result = await updatePrice.mutateAsync({
+      id: ingredientId,
+      data: {
+        price: data.price,
+        effectiveDate: data.effectiveDate,
+        reason: data.reason,
+        priceTier1: data.priceTier1 ?? undefined,
+        priceTier2: data.priceTier2 ?? undefined,
+      },
+    });
     qc.invalidateQueries({ queryKey: getGetIngredientQueryKey(ingredientId) });
-    priceForm.reset({ price: 0, effectiveDate: new Date().toISOString().split("T")[0], reason: "" });
+    qc.invalidateQueries({ queryKey: getGetIngredientPriceHistoryQueryKey(ingredientId) });
+    priceForm.reset({ price: 0, effectiveDate: new Date().toISOString().split("T")[0], reason: "", priceTier1: null, priceTier2: null });
     toast({
       title: "Price updated",
       description: result.affectedSkuCount > 0
         ? `${result.affectedSkuCount} SKU${result.affectedSkuCount > 1 ? "s" : ""} recalculated`
         : undefined,
     });
+  }
+
+  function handleStartEditPrice(h: { id: number; price: number; effectiveDate: string; reason?: string | null }) {
+    setEditingPriceId(h.id);
+    editPriceForm.reset({
+      price: h.price,
+      effectiveDate: h.effectiveDate,
+      reason: h.reason ?? "",
+    });
+  }
+
+  async function handleSubmitEditPrice(data: z.infer<typeof editPriceSchema>) {
+    if (editingPriceId === null) return;
+    await editPrice.mutateAsync({
+      id: ingredientId,
+      priceId: editingPriceId,
+      data: { price: data.price, effectiveDate: data.effectiveDate, reason: data.reason || null },
+    });
+    qc.invalidateQueries({ queryKey: getGetIngredientPriceHistoryQueryKey(ingredientId) });
+    qc.invalidateQueries({ queryKey: getGetIngredientQueryKey(ingredientId) });
+    setEditingPriceId(null);
+    toast({ title: "Price record updated" });
+  }
+
+  async function handleDeletePrice() {
+    if (deletingPriceId === null) return;
+    await deletePrice.mutateAsync({ id: ingredientId, priceId: deletingPriceId });
+    qc.invalidateQueries({ queryKey: getGetIngredientPriceHistoryQueryKey(ingredientId) });
+    qc.invalidateQueries({ queryKey: getGetIngredientQueryKey(ingredientId) });
+    setDeletingPriceId(null);
+    toast({ title: "Price record deleted" });
   }
 
   function addFiles(files: FileList | null) {
@@ -461,6 +538,38 @@ export default function IngredientDetail({ id }: { id: string }) {
                   <FormMessage />
                 </FormItem>
               )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={priceForm.control} name="priceTier1" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tier 1 price <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">฿</span>
+                        <Input type="number" step="0.0001" className="pl-7" placeholder="0.0000"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={e => field.onChange(e.target.value === "" ? null : e.target.value)} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={priceForm.control} name="priceTier2" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tier 2 price <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">฿</span>
+                        <Input type="number" step="0.0001" className="pl-7" placeholder="0.0000"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={e => field.onChange(e.target.value === "" ? null : e.target.value)} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
               <Button type="submit" size="sm" variant="secondary" disabled={updatePrice.isPending}>
                 {updatePrice.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Record price change
@@ -501,21 +610,85 @@ export default function IngredientDetail({ id }: { id: string }) {
                   <TableHead className="text-right">Price (THB)</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Logged by</TableHead>
+                  <TableHead className="w-[72px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingHist ? (
-                  <TableRow><TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                 ) : history?.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground text-sm">No history yet.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground text-sm">No history yet.</TableCell></TableRow>
                 ) : (
                   history?.map(h => (
-                    <TableRow key={h.id}>
-                      <TableCell>{formatDate(h.effectiveDate)}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{formatCurrency(h.price)}</TableCell>
-                      <TableCell className="text-muted-foreground">{h.reason || "—"}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">{h.loggedBy || "—"}</TableCell>
-                    </TableRow>
+                    editingPriceId === h.id ? (
+                      <TableRow key={h.id} className="bg-muted/20">
+                        <TableCell colSpan={5} className="py-3 px-4">
+                          <Form {...editPriceForm}>
+                            <form onSubmit={editPriceForm.handleSubmit(handleSubmitEditPrice)} className="flex flex-wrap gap-3 items-end">
+                              <FormField control={editPriceForm.control} name="effectiveDate" render={({ field }) => (
+                                <FormItem className="flex-none">
+                                  <FormLabel className="text-xs">Date</FormLabel>
+                                  <FormControl><Input type="date" className="h-8 text-sm w-36" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={editPriceForm.control} name="price" render={({ field }) => (
+                                <FormItem className="flex-none">
+                                  <FormLabel className="text-xs">Price (THB)</FormLabel>
+                                  <FormControl>
+                                    <div className="relative">
+                                      <span className="absolute left-2.5 top-2 text-muted-foreground text-sm">฿</span>
+                                      <Input type="number" step="0.0001" className="h-8 text-sm pl-6 w-28" {...field} />
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={editPriceForm.control} name="reason" render={({ field }) => (
+                                <FormItem className="flex-1 min-w-[140px]">
+                                  <FormLabel className="text-xs">Reason</FormLabel>
+                                  <FormControl><Input className="h-8 text-sm" placeholder="Reason" {...field} value={field.value || ""} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <div className="flex gap-2 pb-0.5">
+                                <Button type="submit" size="sm" className="h-8" disabled={editPrice.isPending}>
+                                  {editPrice.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                </Button>
+                                <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => setEditingPriceId(null)}>
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </form>
+                          </Form>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <TableRow key={h.id}>
+                        <TableCell>{formatDate(h.effectiveDate)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{formatCurrency(h.price)}</TableCell>
+                        <TableCell className="text-muted-foreground">{h.reason || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{h.loggedBy || "—"}</TableCell>
+                        <TableCell className="text-right pr-3">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              type="button" variant="ghost" size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleStartEditPrice(h)}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              type="button" variant="ghost" size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeletingPriceId(h.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
                   ))
                 )}
               </TableBody>
@@ -523,6 +696,27 @@ export default function IngredientDetail({ id }: { id: string }) {
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={deletingPriceId !== null} onOpenChange={open => { if (!open) setDeletingPriceId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete price record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this price entry from the history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeletePrice}
+              disabled={deletePrice.isPending}
+            >
+              {deletePrice.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Card>
         <CardHeader className="pb-4">

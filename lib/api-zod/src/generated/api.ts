@@ -162,6 +162,25 @@ export const UpdateIngredientPriceBody = zod.object({
   price: zod.number(),
   effectiveDate: zod.string(),
   reason: zod.string().nullish(),
+  priceTier1: zod.number().nullish(),
+  priceTier2: zod.number().nullish(),
+});
+
+export const EditIngredientPriceParams = zod.object({
+  id: zod.coerce.number(),
+  priceId: zod.coerce.number(),
+});
+
+export const EditIngredientPriceBody = zod.object({
+  price: zod.number(),
+  effectiveDate: zod.string(),
+  reason: zod.string().nullish(),
+
+});
+
+export const DeleteIngredientPriceParams = zod.object({
+  id: zod.coerce.number(),
+  priceId: zod.coerce.number(),
 });
 
 export const UpdateIngredientPriceResponse = zod.object({

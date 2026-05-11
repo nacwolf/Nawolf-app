@@ -160,6 +160,17 @@ export interface UpdateIngredientPriceBody {
   effectiveDate: string;
   /** @nullable */
   reason?: string | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier2?: number | null;
+}
+
+export interface EditIngredientPriceBody {
+  price: number;
+  effectiveDate: string;
+  /** @nullable */
+  reason?: string | null;
 }
 
 export interface UpdateIngredientPriceResponse {

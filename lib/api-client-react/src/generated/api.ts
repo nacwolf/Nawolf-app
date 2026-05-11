@@ -23,6 +23,7 @@ import type {
   CreateIngredientBody,
   CreateSkuBody,
   DashboardSummary,
+  EditIngredientPriceBody,
   ErrorResponse,
   HealthStatus,
   Ingredient,
@@ -549,6 +550,170 @@ export const useUpdateIngredientPrice = <
   TContext
 > => {
   return useMutation(getUpdateIngredientPriceMutationOptions(options));
+};
+
+/**
+ * @summary Edit an existing price history record
+ */
+export const getEditIngredientPriceUrl = (id: number, priceId: number) => {
+  return `/api/ingredients/${id}/prices/${priceId}`;
+};
+
+export const editIngredientPrice = async (
+  id: number,
+  priceId: number,
+  editIngredientPriceBody: EditIngredientPriceBody,
+  options?: RequestInit,
+): Promise<IngredientPrice> => {
+  return customFetch<IngredientPrice>(getEditIngredientPriceUrl(id, priceId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(editIngredientPriceBody),
+  });
+};
+
+export const getEditIngredientPriceMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editIngredientPrice>>,
+    TError,
+    { id: number; priceId: number; data: BodyType<EditIngredientPriceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof editIngredientPrice>>,
+  TError,
+  { id: number; priceId: number; data: BodyType<EditIngredientPriceBody> },
+  TContext
+> => {
+  const mutationKey = ["editIngredientPrice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof editIngredientPrice>>,
+    { id: number; priceId: number; data: BodyType<EditIngredientPriceBody> }
+  > = (props) => {
+    const { id, priceId, data } = props ?? {};
+    return editIngredientPrice(id, priceId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EditIngredientPriceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof editIngredientPrice>>
+>;
+export type EditIngredientPriceMutationBody = BodyType<EditIngredientPriceBody>;
+export type EditIngredientPriceMutationError = ErrorType<ErrorResponse>;
+
+export const useEditIngredientPrice = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof editIngredientPrice>>,
+    TError,
+    { id: number; priceId: number; data: BodyType<EditIngredientPriceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof editIngredientPrice>>,
+  TError,
+  { id: number; priceId: number; data: BodyType<EditIngredientPriceBody> },
+  TContext
+> => {
+  return useMutation(getEditIngredientPriceMutationOptions(options));
+};
+
+/**
+ * @summary Delete a price history record
+ */
+export const getDeleteIngredientPriceUrl = (id: number, priceId: number) => {
+  return `/api/ingredients/${id}/prices/${priceId}`;
+};
+
+export const deleteIngredientPrice = async (
+  id: number,
+  priceId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteIngredientPriceUrl(id, priceId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteIngredientPriceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteIngredientPrice>>,
+    TError,
+    { id: number; priceId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteIngredientPrice>>,
+  TError,
+  { id: number; priceId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteIngredientPrice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteIngredientPrice>>,
+    { id: number; priceId: number }
+  > = (props) => {
+    const { id, priceId } = props ?? {};
+    return deleteIngredientPrice(id, priceId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteIngredientPriceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteIngredientPrice>>
+>;
+export type DeleteIngredientPriceMutationError = ErrorType<unknown>;
+
+export const useDeleteIngredientPrice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteIngredientPrice>>,
+    TError,
+    { id: number; priceId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteIngredientPrice>>,
+  TError,
+  { id: number; priceId: number },
+  TContext
+> => {
+  return useMutation(getDeleteIngredientPriceMutationOptions(options));
 };
 
 /**

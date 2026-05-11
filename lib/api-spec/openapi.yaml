@@ -149,6 +149,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /ingredients/{id}/prices/{priceId}:
+    patch:
+      operationId: editIngredientPrice
+      tags: [ingredients]
+      summary: Edit an existing price history record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: priceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditIngredientPriceBody"
+      responses:
+        "200":
+          description: Updated price record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientPrice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteIngredientPrice
+      tags: [ingredients]
+      summary: Delete a price history record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: priceId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /ingredients/{id}/price-history:
     get:
       operationId: getIngredientPriceHistory
@@ -734,6 +788,23 @@ components:
           type: ["string", "null"]
 
     UpdateIngredientPriceBody:
+      type: object
+      properties:
+        price:
+          type: number
+        effectiveDate:
+          type: string
+        reason:
+          type: ["string", "null"]
+        priceTier1:
+          type: ["number", "null"]
+        priceTier2:
+          type: ["number", "null"]
+      required:
+        - price
+        - effectiveDate
+
+    EditIngredientPriceBody:
       type: object
       properties:
         price:

@@ -15,6 +15,9 @@ import {
   UpdateIngredientPriceParams,
   UpdateIngredientPriceBody,
   GetIngredientPriceHistoryParams,
+  EditIngredientPriceParams,
+  EditIngredientPriceBody,
+  DeleteIngredientPriceParams,
 } from "@workspace/api-zod";
 import { getCurrentPrice, recalculateAllSkusUsingIngredient } from "../lib/kostr";
 import { getAuth } from "@clerk/express";
@@ -347,6 +350,52 @@ router.post("/ingredients/:id/price", requireAuth, async (req, res): Promise<voi
     })
     .returning();
 
+  if (parsed.data.priceTier1 !== undefined || parsed.data.priceTier2 !== undefined) {
+    const tierChanges: Array<{ tier: string; oldPrice: string | null; newPrice: string | null; oldDesc: string | null; newDesc: string | null }> = [];
+
+    if (parsed.data.priceTier1 !== undefined) {
+      tierChanges.push({
+        tier: "tier1",
+        oldPrice: ingredient.priceTier1 ?? null,
+        newPrice: parsed.data.priceTier1 != null ? parsed.data.priceTier1.toFixed(4) : null,
+        oldDesc: ingredient.priceTier1Description ?? null,
+        newDesc: ingredient.priceTier1Description ?? null,
+      });
+    }
+
+    if (parsed.data.priceTier2 !== undefined) {
+      tierChanges.push({
+        tier: "tier2",
+        oldPrice: ingredient.priceTier2 ?? null,
+        newPrice: parsed.data.priceTier2 != null ? parsed.data.priceTier2.toFixed(4) : null,
+        oldDesc: ingredient.priceTier2Description ?? null,
+        newDesc: ingredient.priceTier2Description ?? null,
+      });
+    }
+
+    await db
+      .update(ingredientsTable)
+      .set({
+        ...(parsed.data.priceTier1 !== undefined ? { priceTier1: parsed.data.priceTier1 != null ? parsed.data.priceTier1.toFixed(4) : null } : {}),
+        ...(parsed.data.priceTier2 !== undefined ? { priceTier2: parsed.data.priceTier2 != null ? parsed.data.priceTier2.toFixed(4) : null } : {}),
+      })
+      .where(eq(ingredientsTable.id, params.data.id));
+
+    if (tierChanges.length > 0) {
+      await db.insert(ingredientTierPriceHistoryTable).values(
+        tierChanges.map(tc => ({
+          ingredientId: params.data.id,
+          tier: tc.tier,
+          oldPrice: tc.oldPrice,
+          newPrice: tc.newPrice,
+          oldDescription: tc.oldDesc,
+          newDescription: tc.newDesc,
+          changedBy: auth?.userId ?? null,
+        }))
+      );
+    }
+  }
+
   const triggeredBy = `price_update:ingredient_${params.data.id}`;
   const affectedSkuCount = await recalculateAllSkusUsingIngredient(params.data.id, triggeredBy);
 
@@ -357,6 +406,67 @@ router.post("/ingredients/:id/price", requireAuth, async (req, res): Promise<voi
     },
     affectedSkuCount,
   });
+});
+
+router.patch("/ingredients/:id/prices/:priceId", requireAuth, async (req, res): Promise<void> => {
+  const params = EditIngredientPriceParams.safeParse({ id: req.params.id, priceId: req.params.priceId });
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const parsed = EditIngredientPriceBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(ingredientPricesTable)
+    .where(eq(ingredientPricesTable.id, params.data.priceId));
+
+  if (!existing || existing.ingredientId !== params.data.id) {
+    res.status(404).json({ error: "Price record not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(ingredientPricesTable)
+    .set({
+      price: parsed.data.price.toFixed(4),
+      effectiveDate: parsed.data.effectiveDate,
+      reason: parsed.data.reason ?? null,
+    })
+    .where(eq(ingredientPricesTable.id, params.data.priceId))
+    .returning();
+
+  res.json({
+    ...updated,
+    price: parseFloat(updated.price),
+  });
+});
+
+router.delete("/ingredients/:id/prices/:priceId", requireAuth, async (req, res): Promise<void> => {
+  const params = DeleteIngredientPriceParams.safeParse({ id: req.params.id, priceId: req.params.priceId });
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(ingredientPricesTable)
+    .where(eq(ingredientPricesTable.id, params.data.priceId));
+
+  if (!existing || existing.ingredientId !== params.data.id) {
+    res.status(404).json({ error: "Price record not found" });
+    return;
+  }
+
+  await db.delete(ingredientPricesTable).where(eq(ingredientPricesTable.id, params.data.priceId));
+
+  res.status(204).send();
 });
 
 router.get("/ingredients/:id/price-history", requireAuth, async (req, res): Promise<void> => {
