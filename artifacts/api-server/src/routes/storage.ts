@@ -1,11 +1,13 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { eq } from "drizzle-orm";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getAuth } from "@clerk/express";
+import { db, ingredientAttachmentsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -56,7 +58,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
       return;
     }
 
-    const response = await objectStorageService.downloadObject(file);
+    const response = await objectStorageService.downloadObject(file, { isPublic: true });
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
 
@@ -79,8 +81,21 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
-    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
+    // Authorization: the objectPath must correspond to a known attachment record.
+    // Any authenticated user can access attachments (internal multi-user tool).
+    const [attachment] = await db
+      .select({ id: ingredientAttachmentsTable.id })
+      .from(ingredientAttachmentsTable)
+      .where(eq(ingredientAttachmentsTable.objectPath, objectPath))
+      .limit(1);
+
+    if (!attachment) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
     const response = await objectStorageService.downloadObject(objectFile);
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
