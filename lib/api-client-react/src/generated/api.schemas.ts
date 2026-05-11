@@ -134,6 +134,10 @@ export interface UpdateIngredientBody {
   /** @nullable */
   name?: string | null;
   /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  unit?: string | null;
+  /** @nullable */
   subCategory?: string | null;
   /** @nullable */
   description?: string | null;

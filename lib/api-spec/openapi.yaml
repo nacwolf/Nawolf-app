@@ -712,6 +712,10 @@ components:
       properties:
         name:
           type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        unit:
+          type: ["string", "null"]
         subCategory:
           type: ["string", "null"]
         description:

@@ -207,8 +207,13 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
 
   const auth = getAuth(req);
 
+  const ALLOWED_CATEGORIES = ["Raw Materials", "Packaging", "Quality & Compliance", "Delivery"] as const;
+  const ALLOWED_UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
+
   interface PatchBody {
     name?: string;
+    category?: string;
+    unit?: string;
     supplier?: string | null;
     subCategory?: string | null;
     description?: string | null;
@@ -224,6 +229,14 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     res.status(400).json({ error: "Name cannot be empty" });
     return;
   }
+  if (body.category !== undefined && !(ALLOWED_CATEGORIES as readonly string[]).includes(body.category)) {
+    res.status(400).json({ error: `category must be one of: ${ALLOWED_CATEGORIES.join(", ")}` });
+    return;
+  }
+  if (body.unit !== undefined && !(ALLOWED_UNITS as readonly string[]).includes(body.unit)) {
+    res.status(400).json({ error: `unit must be one of: ${ALLOWED_UNITS.join(", ")}` });
+    return;
+  }
 
   const [current] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, id));
   if (!current) {
@@ -235,6 +248,8 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
   const updateData: IngredientUpdate = {};
 
   if (body.name !== undefined) updateData.name = body.name;
+  if (body.category !== undefined) updateData.category = body.category;
+  if (body.unit !== undefined) updateData.unit = body.unit;
   if (body.supplier !== undefined) updateData.supplier = body.supplier?.trim() || null;
   if (body.subCategory !== undefined) updateData.subCategory = body.subCategory?.trim() || null;
   if (body.description !== undefined) updateData.description = body.description?.trim() || null;

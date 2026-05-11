@@ -31,8 +31,12 @@ import { getApiUrl } from "@/lib/queryClient";
 
 const UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
 
+const INGREDIENT_CATEGORIES = ["Raw Materials", "Packaging", "Quality & Compliance", "Delivery"] as const;
+
 const editSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  category: z.enum(INGREDIENT_CATEGORIES),
+  unit: z.enum(UNITS),
   subCategory: z.string().optional(),
   description: z.string().optional(),
   supplier: z.string().optional(),
@@ -79,6 +83,8 @@ export default function IngredientDetail({ id }: { id: string }) {
     resolver: zodResolver(editSchema),
     defaultValues: {
       name: "",
+      category: "Raw Materials",
+      unit: "kg",
       subCategory: "",
       description: "",
       supplier: "",
@@ -94,6 +100,12 @@ export default function IngredientDetail({ id }: { id: string }) {
     if (ingredient) {
       editForm.reset({
         name: ingredient.name,
+        category: (INGREDIENT_CATEGORIES as readonly string[]).includes(ingredient.category)
+          ? (ingredient.category as typeof INGREDIENT_CATEGORIES[number])
+          : "Raw Materials",
+        unit: (UNITS as readonly string[]).includes(ingredient.unit)
+          ? (ingredient.unit as typeof UNITS[number])
+          : "kg",
         subCategory: ingredient.subCategory ?? "",
         description: ingredient.description ?? "",
         supplier: ingredient.supplier ?? "",
@@ -121,6 +133,8 @@ export default function IngredientDetail({ id }: { id: string }) {
       id: ingredientId,
       data: {
         name: data.name,
+        category: data.category,
+        unit: data.unit,
         subCategory: data.subCategory || null,
         description: data.description || null,
         supplier: data.supplier || null,
@@ -286,12 +300,20 @@ export default function IngredientDetail({ id }: { id: string }) {
               )} />
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Category</label>
-                  <div className="mt-1.5 px-3 py-2 bg-muted/40 rounded-md text-sm text-muted-foreground border">
-                    {ingredient.category}
-                  </div>
-                </div>
+                <FormField control={editForm.control} name="category" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {INGREDIENT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
                 <FormField control={editForm.control} name="subCategory" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sub-category</FormLabel>
@@ -300,6 +322,21 @@ export default function IngredientDetail({ id }: { id: string }) {
                   </FormItem>
                 )} />
               </div>
+
+              <FormField control={editForm.control} name="unit" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unit</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
 
               <FormField control={editForm.control} name="description" render={({ field }) => (
                 <FormItem>
