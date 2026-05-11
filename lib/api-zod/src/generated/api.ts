@@ -21,12 +21,22 @@ export const ListIngredientsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   category: zod.string(),
+  subCategory: zod.string().nullish(),
+  description: zod.string().nullish(),
   unit: zod.string(),
   supplier: zod.string().nullish(),
+  priceTier1: zod.number().nullish(),
+  priceTier1Description: zod.string().nullish(),
+  priceTier2: zod.number().nullish(),
+  priceTier2Description: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
   createdAt: zod.string(),
   currentPrice: zod.number().nullish(),
   priceEffectiveDate: zod.string().nullish(),
   skuCount: zod.number(),
+  previousPrice: zod.number().nullish(),
+  priceChangePct: zod.number().nullish(),
 });
 export const ListIngredientsResponse = zod.array(ListIngredientsResponseItem);
 
@@ -36,9 +46,17 @@ export const ListIngredientsResponse = zod.array(ListIngredientsResponseItem);
 export const CreateIngredientBody = zod.object({
   name: zod.string(),
   category: zod.string(),
+  subCategory: zod.string().nullish(),
+  description: zod.string().nullish(),
   unit: zod.string(),
   supplier: zod.string().nullish(),
   initialPrice: zod.number().nullish(),
+  priceTier1: zod.number().nullish(),
+  priceTier1Description: zod.string().nullish(),
+  priceTier2: zod.number().nullish(),
+  priceTier2Description: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
 });
 
 /**
@@ -52,12 +70,58 @@ export const GetIngredientResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   category: zod.string(),
+  subCategory: zod.string().nullish(),
+  description: zod.string().nullish(),
   unit: zod.string(),
   supplier: zod.string().nullish(),
+  priceTier1: zod.number().nullish(),
+  priceTier1Description: zod.string().nullish(),
+  priceTier2: zod.number().nullish(),
+  priceTier2Description: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
   createdAt: zod.string(),
   currentPrice: zod.number().nullish(),
   priceEffectiveDate: zod.string().nullish(),
   skuCount: zod.number(),
+  previousPrice: zod.number().nullish(),
+  priceChangePct: zod.number().nullish(),
+});
+
+/**
+ * @summary Update ingredient fields
+ */
+export const UpdateIngredientParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateIngredientBody = zod.object({
+  name: zod.string().nullish(),
+  subCategory: zod.string().nullish(),
+  description: zod.string().nullish(),
+  supplier: zod.string().nullish(),
+  priceTier1: zod.number().nullish(),
+  priceTier1Description: zod.string().nullish(),
+  priceTier2: zod.number().nullish(),
+  priceTier2Description: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+export const UpdateIngredientResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  category: zod.string(),
+  subCategory: zod.string().nullish(),
+  description: zod.string().nullish(),
+  unit: zod.string(),
+  supplier: zod.string().nullish(),
+  priceTier1: zod.number().nullish(),
+  priceTier1Description: zod.string().nullish(),
+  priceTier2: zod.number().nullish(),
+  priceTier2Description: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  createdBy: zod.string().nullish(),
+  createdAt: zod.string(),
 });
 
 /**
@@ -105,6 +169,68 @@ export const GetIngredientPriceHistoryResponseItem = zod.object({
 export const GetIngredientPriceHistoryResponse = zod.array(
   GetIngredientPriceHistoryResponseItem,
 );
+
+/**
+ * @summary List attachments for an ingredient
+ */
+export const ListIngredientAttachmentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListIngredientAttachmentsResponseItem = zod.object({
+  id: zod.number(),
+  ingredientId: zod.number(),
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileType: zod.string().nullish(),
+  uploadedBy: zod.string().nullish(),
+  uploadedAt: zod.string(),
+});
+export const ListIngredientAttachmentsResponse = zod.array(
+  ListIngredientAttachmentsResponseItem,
+);
+
+/**
+ * @summary Record a file attachment for an ingredient
+ */
+export const CreateIngredientAttachmentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateIngredientAttachmentBody = zod.object({
+  fileName: zod.string(),
+  objectPath: zod.string(),
+  fileType: zod.string().nullish(),
+});
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1),
+  size: zod.number().min(1),
+  contentType: zod.string().min(1),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url(),
+  objectPath: zod.string(),
+});
+
+/**
+ * @summary Serve a public asset
+ */
+export const GetPublicObjectParams = zod.object({
+  filePath: zod.coerce.string(),
+});
+
+/**
+ * @summary Serve an object entity
+ */
+export const GetStorageObjectParams = zod.object({
+  objectPath: zod.coerce.string(),
+});
 
 /**
  * @summary List all SKUs with current margin status

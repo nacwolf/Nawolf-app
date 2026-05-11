@@ -16,6 +16,7 @@ import SkusList from "@/pages/skus";
 import SkuNew from "@/pages/skus/new";
 import SkuDetail from "@/pages/skus/[id]";
 import IngredientsList from "@/pages/ingredients";
+import IngredientNew from "@/pages/ingredients/new";
 import IngredientDetail from "@/pages/ingredients/[id]";
 import ActivityFeed from "@/pages/activity";
 import NotFound from "@/pages/not-found";
@@ -103,6 +104,14 @@ function ClerkProviderWithRoutes() {
 
             <Route path="/skus">
               <ProtectedRoute component={SkusList} />
+            </Route>
+
+            <Route path="/ingredients/new">
+              {() => {
+                const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+                const category = search.get("category") || undefined;
+                return <ProtectedRoute component={() => <IngredientNew initialCategory={category} />} />;
+              }}
             </Route>
 
             <Route path="/ingredients/:id">

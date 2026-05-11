@@ -6,15 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface Ingredient {
-  id: number;
-  name: string;
-  category: string;
+export interface UpdateIngredientBody {
+  /** @nullable */
+  name?: string | null;
   /** @nullable */
   subCategory?: string | null;
   /** @nullable */
   description?: string | null;
-  unit: string;
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
@@ -27,7 +25,4 @@ export interface Ingredient {
   priceTier2Description?: string | null;
   /** @nullable */
   notes?: string | null;
-  /** @nullable */
-  createdBy?: string | null;
-  createdAt: string;
 }

@@ -9,9 +9,25 @@
 export interface CreateIngredientBody {
   name: string;
   category: string;
+  /** @nullable */
+  subCategory?: string | null;
+  /** @nullable */
+  description?: string | null;
   unit: string;
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
   initialPrice?: number | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier1Description?: string | null;
+  /** @nullable */
+  priceTier2?: number | null;
+  /** @nullable */
+  priceTier2Description?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
 }

@@ -1,8 +1,10 @@
 export function formatCurrency(value: number | null | undefined): string {
   if (value == null) return "—";
-  return new Intl.NumberFormat("en-IE", {
+  return new Intl.NumberFormat("th-TH", {
     style: "currency",
-    currency: "EUR",
+    currency: "THB",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
   }).format(value);
 }
 

@@ -10,13 +10,33 @@ export interface IngredientWithPrice {
   id: number;
   name: string;
   category: string;
+  /** @nullable */
+  subCategory?: string | null;
+  /** @nullable */
+  description?: string | null;
   unit: string;
   /** @nullable */
   supplier?: string | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier1Description?: string | null;
+  /** @nullable */
+  priceTier2?: number | null;
+  /** @nullable */
+  priceTier2Description?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
   createdAt: string;
   /** @nullable */
   currentPrice?: number | null;
   /** @nullable */
   priceEffectiveDate?: string | null;
   skuCount: number;
+  /** @nullable */
+  previousPrice?: number | null;
+  /** @nullable */
+  priceChangePct?: number | null;
 }

@@ -1,24 +1,23 @@
 import { useState, useMemo } from "react";
-import { useListIngredients, useCreateIngredient, useUpdateIngredientPrice, getListIngredientsQueryKey } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
+import { useListIngredients } from "@workspace/api-client-react";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, TrendingUp, TrendingDown, Minus, Pencil, Users, Calculator, Info, Check, Loader2 } from "lucide-react";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Search, Plus, TrendingUp, TrendingDown, Minus, Users, Calculator, Info, Check, Loader2, ExternalLink } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { getApiUrl } from "@/lib/queryClient";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const INGREDIENT_CATEGORIES = [
   "Raw Materials",
@@ -48,25 +47,6 @@ const CATEGORY_TEXT: Record<string, string> = {
   "Delivery": "text-amber-700",
 };
 
-const addIngredientSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  category: z.string().min(1, "Category is required"),
-  unit: z.string().min(1, "Unit is required"),
-  supplier: z.string().optional(),
-  initialPrice: z.coerce.number().min(0, "Must be ≥ 0"),
-});
-
-const addPriceSchema = z.object({
-  price: z.coerce.number().min(0.0001, "Price must be > 0"),
-  effectiveDate: z.string().min(1, "Date required"),
-  reason: z.string().optional(),
-});
-
-const editNameSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  supplier: z.string().optional(),
-});
-
 const teamMemberSchema = z.object({
   name: z.string().min(1, "Name is required"),
   roleDescription: z.string().optional(),
@@ -80,48 +60,16 @@ interface OverheadItem { id: number; name: string; monthlyAmount: number; freque
 export default function CostLibrary() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
   const { data: ingredients, isLoading: ingLoading } = useListIngredients();
 
   const [search, setSearch] = useState("");
-  const [editPanelId, setEditPanelId] = useState<number | null>(null);
-  const [addIngOpen, setAddIngOpen] = useState(false);
-  const [addIngCategory, setAddIngCategory] = useState<string>("Raw Materials");
   const [editTeamMember, setEditTeamMember] = useState<TeamMember | null>(null);
   const [addTeamOpen, setAddTeamOpen] = useState(false);
-
-  const createIngredient = useCreateIngredient();
-  const updatePrice = useUpdateIngredientPrice();
-
-  const addIngForm = useForm<z.infer<typeof addIngredientSchema>>({
-    resolver: zodResolver(addIngredientSchema),
-    defaultValues: { name: "", category: "Raw Materials", unit: "kg", supplier: "", initialPrice: 0 },
-  });
-
-  const editNameForm = useForm<z.infer<typeof editNameSchema>>({
-    resolver: zodResolver(editNameSchema),
-    defaultValues: { name: "", supplier: "" },
-  });
-
-  const addPriceForm = useForm<z.infer<typeof addPriceSchema>>({
-    resolver: zodResolver(addPriceSchema),
-    defaultValues: { price: 0, effectiveDate: new Date().toISOString().split("T")[0], reason: "" },
-  });
 
   const teamMemberForm = useForm<z.infer<typeof teamMemberSchema>>({
     resolver: zodResolver(teamMemberSchema),
     defaultValues: { name: "", roleDescription: "", hourlyWage: 15, oncostPercent: 25 },
-  });
-
-  const editingIngredient = ingredients?.find(i => i.id === editPanelId);
-
-  const { data: ingredientSkus } = useQuery({
-    queryKey: ["ingredient-skus", editPanelId],
-    queryFn: async () => {
-      if (!editPanelId) return [];
-      const r = await fetch(getApiUrl(`/ingredients/${editPanelId}/skus`));
-      return r.json();
-    },
-    enabled: !!editPanelId,
   });
 
   const { data: teamData, isLoading: teamLoading } = useQuery({
@@ -166,45 +114,10 @@ export default function CostLibrary() {
     const q = search.toLowerCase();
     return ingredients.filter(i =>
       i.name.toLowerCase().includes(q) ||
-      (i.supplier || "").toLowerCase().includes(q)
+      (i.supplier || "").toLowerCase().includes(q) ||
+      (i.subCategory || "").toLowerCase().includes(q)
     );
   }, [ingredients, search]);
-
-  function openEdit(id: number) {
-    const ing = ingredients?.find(i => i.id === id);
-    if (!ing) return;
-    setEditPanelId(id);
-    editNameForm.reset({ name: ing.name, supplier: ing.supplier || "" });
-    addPriceForm.reset({ price: 0, effectiveDate: new Date().toISOString().split("T")[0], reason: "" });
-  }
-
-  async function handleSaveName(data: z.infer<typeof editNameSchema>) {
-    if (!editPanelId) return;
-    await fetch(getApiUrl(`/ingredients/${editPanelId}`), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: data.name, supplier: data.supplier || null }),
-    });
-    qc.invalidateQueries({ queryKey: getListIngredientsQueryKey() });
-    toast({ title: "Updated" });
-  }
-
-  async function handleAddPrice(data: z.infer<typeof addPriceSchema>) {
-    if (!editPanelId) return;
-    await updatePrice.mutateAsync({ id: editPanelId, data });
-    qc.invalidateQueries({ queryKey: getListIngredientsQueryKey() });
-    addPriceForm.reset({ price: 0, effectiveDate: new Date().toISOString().split("T")[0], reason: "" });
-    toast({ title: "Price updated" });
-  }
-
-  async function handleAddIngredient(data: z.infer<typeof addIngredientSchema>) {
-    await createIngredient.mutateAsync({
-      data: { name: data.name, category: data.category, unit: data.unit, supplier: data.supplier || undefined, initialPrice: data.initialPrice },
-    });
-    setAddIngOpen(false);
-    addIngForm.reset();
-    toast({ title: "Cost element added" });
-  }
 
   async function handleSaveTeamMember(data: z.infer<typeof teamMemberSchema>) {
     if (editTeamMember) {
@@ -234,7 +147,6 @@ export default function CostLibrary() {
     setIsSavingOverhead(true);
     try {
       let totalAffected = 0;
-
       for (const [idStr, val] of Object.entries(overheadEdits)) {
         const freq = freqEdits[idStr] ?? undefined;
         const r = await fetch(getApiUrl(`/overhead/items/${idStr}`), {
@@ -245,7 +157,6 @@ export default function CostLibrary() {
         const result = await r.json();
         totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
       }
-
       for (const [idStr, freq] of Object.entries(freqEdits)) {
         if (overheadEdits[idStr]) continue;
         const r = await fetch(getApiUrl(`/overhead/items/${idStr}`), {
@@ -256,7 +167,6 @@ export default function CostLibrary() {
         const result = await r.json();
         totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
       }
-
       if (operatingDaysInput !== "") {
         const r = await fetch(getApiUrl("/overhead/settings"), {
           method: "PATCH",
@@ -266,7 +176,6 @@ export default function CostLibrary() {
         const result = await r.json();
         totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
       }
-
       setOverheadEdits({});
       setFreqEdits({});
       setOperatingDaysInput("");
@@ -312,7 +221,7 @@ export default function CostLibrary() {
           <CardContent className="p-0">
             {teamLoading ? (
               <div className="p-6 space-y-2">
-                {[1,2].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                {[1, 2].map(i => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
             ) : (teamData?.length ?? 0) === 0 ? (
               <div className="py-10 text-center text-muted-foreground text-sm">
@@ -347,8 +256,8 @@ export default function CostLibrary() {
                       <TableCell className="text-right">{formatCurrency(member.hourlyWage)}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{member.oncostPercent}%</TableCell>
                       <TableCell className="text-right font-semibold text-orange-700">{formatCurrency(member.loadedRate)}</TableCell>
-                      <TableCell className="pr-4">
-                        <Pencil className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 ml-auto transition-opacity" />
+                      <TableCell className="pr-4 text-right">
+                        <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -374,7 +283,6 @@ export default function CostLibrary() {
               <div className="p-6"><Skeleton className="h-40 w-full" /></div>
             ) : (
               <>
-                {/* Factory operating days */}
                 <div className="px-6 py-4 border-b bg-slate-50/60 flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1">
                     <label className="text-sm font-medium flex items-center gap-1.5">
@@ -386,10 +294,7 @@ export default function CostLibrary() {
                     </label>
                     <div className="flex items-center gap-2 mt-1.5">
                       <Input
-                        type="number"
-                        min="1"
-                        max="365"
-                        className="w-28 h-9"
+                        type="number" min="1" max="365" className="w-28 h-9"
                         value={operatingDaysInput !== "" ? operatingDaysInput : String(overheadData?.operatingDaysPerYear ?? 250)}
                         onChange={e => setOperatingDaysInput(e.target.value)}
                       />
@@ -411,7 +316,7 @@ export default function CostLibrary() {
                     <TableRow className="bg-muted/30 hover:bg-muted/30">
                       <TableHead className="pl-6 text-xs font-medium">Cost item</TableHead>
                       <TableHead className="text-xs font-medium w-28">Frequency</TableHead>
-                      <TableHead className="text-right text-xs font-medium w-48 pr-6">Amount</TableHead>
+                      <TableHead className="text-right text-xs font-medium w-48 pr-6">Amount (฿)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -423,37 +328,15 @@ export default function CostLibrary() {
                           <TableCell className="pl-6 text-sm">{item.name}</TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setFreqEdits(prev => ({ ...prev, [item.id]: "monthly" }))}
-                                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${currentFreq === "monthly" ? "bg-slate-700 text-white border-slate-700" : "text-muted-foreground border-muted-foreground/30 hover:border-slate-400"}`}
-                              >
-                                Monthly
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setFreqEdits(prev => ({ ...prev, [item.id]: "annual" }))}
-                                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${currentFreq === "annual" ? "bg-amber-600 text-white border-amber-600" : "text-muted-foreground border-muted-foreground/30 hover:border-amber-400"}`}
-                              >
-                                Annual
-                              </button>
+                              <button type="button" onClick={() => setFreqEdits(prev => ({ ...prev, [item.id]: "monthly" }))} className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${currentFreq === "monthly" ? "bg-slate-700 text-white border-slate-700" : "text-muted-foreground border-muted-foreground/30 hover:border-slate-400"}`}>Monthly</button>
+                              <button type="button" onClick={() => setFreqEdits(prev => ({ ...prev, [item.id]: "annual" }))} className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${currentFreq === "annual" ? "bg-amber-600 text-white border-amber-600" : "text-muted-foreground border-muted-foreground/30 hover:border-amber-400"}`}>Annual</button>
                             </div>
                           </TableCell>
                           <TableCell className="pr-6">
                             <div className="flex items-center justify-end gap-1">
-                              <span className="text-muted-foreground text-xs">€</span>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                className="w-28 h-8 text-right text-sm"
-                                value={currentAmount}
-                                onChange={e => setOverheadEdits(prev => ({ ...prev, [item.id]: e.target.value }))}
-                              />
-                              {currentFreq === "annual" && (
-                                <span className="text-xs text-amber-600 whitespace-nowrap">
-                                  ≈ {formatCurrency((parseFloat(currentAmount) || 0) / 12)}/mo
-                                </span>
-                              )}
+                              <span className="text-muted-foreground text-xs">฿</span>
+                              <Input type="number" step="0.01" className="w-28 h-8 text-right text-sm" value={currentAmount} onChange={e => setOverheadEdits(prev => ({ ...prev, [item.id]: e.target.value }))} />
+                              {currentFreq === "annual" && <span className="text-xs text-amber-600 whitespace-nowrap">≈ {formatCurrency((parseFloat(currentAmount) || 0) / 12)}/mo</span>}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -463,9 +346,7 @@ export default function CostLibrary() {
                 </Table>
 
                 <div className="px-6 py-4 bg-slate-50 border-t flex items-center justify-between gap-4">
-                  <p className="text-xs text-muted-foreground">
-                    "Save &amp; apply" recalculates overhead for every SKU that has a production setup.
-                  </p>
+                  <p className="text-xs text-muted-foreground">"Save &amp; apply" recalculates overhead for every SKU that has a production setup.</p>
                   <Button onClick={handleApplyOverhead} disabled={isSavingOverhead} size="sm" className="flex-shrink-0">
                     {isSavingOverhead ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                     Save &amp; apply
@@ -476,7 +357,7 @@ export default function CostLibrary() {
           </CardContent>
         </Card>
 
-        {/* ── INGREDIENT SECTIONS (Raw Materials, Packaging, Q&C, Delivery) ── */}
+        {/* ── INGREDIENT SECTIONS ── */}
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Materials &amp; Cost Elements</h2>
           <div className="relative flex-1 max-w-xs">
@@ -487,7 +368,7 @@ export default function CostLibrary() {
 
         {ingLoading ? (
           <div className="space-y-4">
-            {[1,2].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+            {[1, 2].map(i => <Skeleton key={i} className="h-32 w-full" />)}
           </div>
         ) : (
           <div className="space-y-4">
@@ -501,7 +382,7 @@ export default function CostLibrary() {
                       {items.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{items.length}</Badge>}
                     </div>
                     <button
-                      onClick={() => { setAddIngCategory(cat); setAddIngOpen(true); addIngForm.reset({ name: "", category: cat, unit: cat === "Labor" ? "hr" : cat === "Delivery" ? "unit" : "kg", supplier: "", initialPrice: 0 }); }}
+                      onClick={() => setLocation(`/ingredients/new?category=${encodeURIComponent(cat)}`)}
                       className={`text-xs ${CATEGORY_TEXT[cat]} hover:underline flex items-center gap-0.5`}
                     >
                       <Plus className="w-3 h-3" /> Add
@@ -511,15 +392,16 @@ export default function CostLibrary() {
                   {items.length === 0 ? (
                     <div className="py-6 text-center text-muted-foreground text-sm">
                       No {cat.toLowerCase()} items yet.{" "}
-                      <button onClick={() => { setAddIngCategory(cat); setAddIngOpen(true); addIngForm.reset({ name: "", category: cat, unit: "kg", supplier: "", initialPrice: 0 }); }} className="text-primary hover:underline">Add one →</button>
+                      <button onClick={() => setLocation(`/ingredients/new?category=${encodeURIComponent(cat)}`)} className="text-primary hover:underline">Add one →</button>
                     </div>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/30 hover:bg-muted/30">
                           <TableHead className="pl-6 text-xs font-medium">Name</TableHead>
+                          <TableHead className="text-xs font-medium">Sub-category</TableHead>
                           <TableHead className="text-xs font-medium">Supplier</TableHead>
-                          <TableHead className="text-right text-xs font-medium">Current price</TableHead>
+                          <TableHead className="text-right text-xs font-medium">Current price (฿)</TableHead>
                           <TableHead className="text-right text-xs font-medium">Change</TableHead>
                           <TableHead className="text-right text-xs font-medium">SKUs</TableHead>
                           <TableHead className="w-8" />
@@ -531,10 +413,16 @@ export default function CostLibrary() {
                           const up = hasChange && (ing.priceChangePct as number) > 0;
                           const down = hasChange && (ing.priceChangePct as number) < 0;
                           return (
-                            <TableRow key={ing.id} className="cursor-pointer hover:bg-muted/50 group" onClick={() => openEdit(ing.id)}>
+                            <TableRow
+                              key={ing.id}
+                              className="cursor-pointer hover:bg-muted/50 group"
+                              onClick={() => setLocation(`/ingredients/${ing.id}`)}
+                            >
                               <TableCell className="pl-6">
-                                <span className="font-medium group-hover:text-primary transition-colors">{ing.name}</span>
+                                <div className="font-medium group-hover:text-primary transition-colors">{ing.name}</div>
+                                {ing.description && <div className="text-xs text-muted-foreground truncate max-w-48">{ing.description}</div>}
                               </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">{ing.subCategory || "—"}</TableCell>
                               <TableCell className="text-muted-foreground text-sm">{ing.supplier || "—"}</TableCell>
                               <TableCell className="text-right font-medium tabular-nums">
                                 {ing.currentPrice != null ? `${formatCurrency(ing.currentPrice)}/${ing.unit}` : <span className="text-muted-foreground text-xs">No price set</span>}
@@ -551,9 +439,7 @@ export default function CostLibrary() {
                                 <Badge variant="secondary" className="text-xs">{ing.skuCount}</Badge>
                               </TableCell>
                               <TableCell>
-                                <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1">
-                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                                </button>
+                                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                               </TableCell>
                             </TableRow>
                           );
@@ -577,23 +463,20 @@ export default function CostLibrary() {
             <Form {...teamMemberForm}>
               <form onSubmit={teamMemberForm.handleSubmit(handleSaveTeamMember)} className="space-y-4">
                 <FormField control={teamMemberForm.control} name="name" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl><Input placeholder='e.g. "Marco" or "Ana — baker"' {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder='e.g. "Marco" or "Ana — baker"' {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={teamMemberForm.control} name="roleDescription" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>What they do <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                    <FormControl><Input placeholder="e.g. Production + packing" {...field} value={field.value || ""} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
+                  <FormItem><FormLabel>What they do <span className="text-muted-foreground font-normal">(optional)</span></FormLabel><FormControl><Input placeholder="e.g. Production + packing" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={teamMemberForm.control} name="hourlyWage" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Hourly wage (€)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" min="0" {...field} /></FormControl>
+                    <FormLabel>Hourly wage (฿)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">฿</span>
+                        <Input type="number" step="0.01" min="0" className="pl-7" {...field} />
+                      </div>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -615,7 +498,6 @@ export default function CostLibrary() {
                     <FormMessage />
                   </FormItem>
                 )} />
-
                 {previewLoadedRate > 0 && (
                   <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 text-sm">
                     <span className="text-muted-foreground">This person costs you </span>
@@ -623,7 +505,6 @@ export default function CostLibrary() {
                     <span className="text-muted-foreground"> including all charges</span>
                   </div>
                 )}
-
                 <div className="flex gap-2 pt-2">
                   <Button type="button" variant="ghost" className="flex-1" onClick={() => { setAddTeamOpen(false); setEditTeamMember(null); }}>Cancel</Button>
                   <Button type="submit" className="flex-1">Save</Button>
@@ -632,126 +513,6 @@ export default function CostLibrary() {
             </Form>
           </SheetContent>
         </Sheet>
-
-        {/* ── INGREDIENT EDIT PANEL ── */}
-        <Sheet open={!!editPanelId} onOpenChange={(open) => !open && setEditPanelId(null)}>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-            <SheetHeader className="pb-4">
-              <SheetTitle className="text-lg">{editingIngredient?.name}</SheetTitle>
-              <SheetDescription>{editingIngredient?.category} · {editingIngredient?.unit}</SheetDescription>
-            </SheetHeader>
-
-            <div className="space-y-6">
-              <div className="border rounded-lg p-4 space-y-4">
-                <p className="text-sm font-medium">Details</p>
-                <Form {...editNameForm}>
-                  <form onSubmit={editNameForm.handleSubmit(handleSaveName)} className="space-y-3">
-                    <FormField control={editNameForm.control} name="name" render={({ field }) => (
-                      <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={editNameForm.control} name="supplier" render={({ field }) => (
-                      <FormItem><FormLabel>Supplier</FormLabel><FormControl><Input placeholder="Optional" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <Button type="submit" size="sm">Save details</Button>
-                  </form>
-                </Form>
-              </div>
-
-              <div className="border rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Update price</p>
-                  {editingIngredient?.currentPrice != null && (
-                    <span className="text-sm text-muted-foreground">Current: {formatCurrency(editingIngredient.currentPrice)}/{editingIngredient.unit}</span>
-                  )}
-                </div>
-                <Form {...addPriceForm}>
-                  <form onSubmit={addPriceForm.handleSubmit(handleAddPrice)} className="space-y-3">
-                    <div className="flex gap-2">
-                      <FormField control={addPriceForm.control} name="price" render={({ field }) => (
-                        <FormItem className="flex-1"><FormLabel>New price (€/{editingIngredient?.unit})</FormLabel><FormControl><Input type="number" step="0.0001" {...field} /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={addPriceForm.control} name="effectiveDate" render={({ field }) => (
-                        <FormItem className="flex-1"><FormLabel>Effective date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-                      )} />
-                    </div>
-                    <FormField control={addPriceForm.control} name="reason" render={({ field }) => (
-                      <FormItem><FormLabel>Reason (optional)</FormLabel><FormControl><Input placeholder="e.g. Supplier increase" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <div className="flex items-center justify-between bg-muted rounded-lg px-3 py-2 text-sm">
-                      <span className="text-muted-foreground">SKUs affected</span>
-                      <span className="font-medium">{editingIngredient?.skuCount ?? 0}</span>
-                    </div>
-                    <Button type="submit" size="sm" disabled={updatePrice.isPending}>Update price</Button>
-                  </form>
-                </Form>
-              </div>
-
-              {ingredientSkus && ingredientSkus.length > 0 && (
-                <div className="border rounded-lg p-4 space-y-2">
-                  <p className="text-sm font-medium">Used in {ingredientSkus.length} SKU{ingredientSkus.length !== 1 ? "s" : ""}</p>
-                  <div className="space-y-1.5">
-                    {ingredientSkus.map((sku: any) => (
-                      <div key={sku.id} className="flex items-center gap-2 text-sm">
-                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{sku.skuCode}</span>
-                        <span>{sku.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        {/* ── ADD INGREDIENT DIALOG ── */}
-        <Dialog open={addIngOpen} onOpenChange={(o) => { if (!o) setAddIngOpen(false); }}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add cost element</DialogTitle></DialogHeader>
-            <Form {...addIngForm}>
-              <form onSubmit={addIngForm.handleSubmit(handleAddIngredient)} className="space-y-4">
-                <FormField control={addIngForm.control} name="name" render={({ field }) => (
-                  <FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="e.g. Whey Protein Concentrate" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField control={addIngForm.control} name="category" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {INGREDIENT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={addIngForm.control} name="unit" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Unit</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {["kg", "g", "L", "ml", "each", "unit", "hr", "box"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
-                <FormField control={addIngForm.control} name="supplier" render={({ field }) => (
-                  <FormItem><FormLabel>Supplier <span className="text-muted-foreground font-normal">(optional)</span></FormLabel><FormControl><Input placeholder="Supplier name" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={addIngForm.control} name="initialPrice" render={({ field }) => (
-                  <FormItem><FormLabel>Starting price (€/unit)</FormLabel><FormControl><Input type="number" step="0.0001" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <DialogFooter>
-                  <Button type="button" variant="ghost" onClick={() => setAddIngOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={createIngredient.isPending}>Add</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
       </div>
     </TooltipProvider>
   );

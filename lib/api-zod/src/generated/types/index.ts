@@ -8,12 +8,14 @@
 
 export * from "./addCostLineBody";
 export * from "./costLine";
+export * from "./createIngredientAttachmentBody";
 export * from "./createIngredientBody";
 export * from "./createSkuBody";
 export * from "./dashboardSummary";
 export * from "./errorResponse";
 export * from "./healthStatus";
 export * from "./ingredient";
+export * from "./ingredientAttachment";
 export * from "./ingredientPrice";
 export * from "./ingredientWithPrice";
 export * from "./marginTrendPoint";
@@ -23,6 +25,9 @@ export * from "./skuDetailStatus";
 export * from "./skuSnapshot";
 export * from "./skuWithMargin";
 export * from "./skuWithMarginStatus";
+export * from "./updateIngredientBody";
 export * from "./updateIngredientPriceBody";
 export * from "./updateIngredientPriceResponse";
 export * from "./updateSkuBody";
+export * from "./uploadUrlRequest";
+export * from "./uploadUrlResponse";

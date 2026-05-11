@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, sql } from "drizzle-orm";
-import { db, ingredientsTable, ingredientPricesTable, costLinesTable, skusTable } from "@workspace/db";
+import { db, ingredientsTable, ingredientPricesTable, costLinesTable, skusTable, ingredientAttachmentsTable } from "@workspace/db";
 import {
   CreateIngredientBody,
   GetIngredientParams,
@@ -49,6 +49,8 @@ router.get("/ingredients", requireAuth, async (req, res): Promise<void> => {
 
       return {
         ...ing,
+        priceTier1: ing.priceTier1 ? parseFloat(ing.priceTier1) : null,
+        priceTier2: ing.priceTier2 ? parseFloat(ing.priceTier2) : null,
         currentPrice,
         priceEffectiveDate: priceRows[0]?.effectiveDate ?? null,
         skuCount: Number(countRow?.count ?? 0),
@@ -70,19 +72,29 @@ router.post("/ingredients", requireAuth, async (req, res): Promise<void> => {
 
   const { initialPrice, ...ingredientData } = parsed.data;
 
-  const [ingredient] = await db.insert(ingredientsTable).values(ingredientData).returning();
+  const [ingredient] = await db.insert(ingredientsTable).values({
+    ...ingredientData,
+    priceTier1: ingredientData.priceTier1 != null ? String(ingredientData.priceTier1) : null,
+    priceTier2: ingredientData.priceTier2 != null ? String(ingredientData.priceTier2) : null,
+  }).returning();
 
   if (initialPrice != null) {
+    const auth = getAuth(req);
     const today = new Date().toISOString().split("T")[0];
     await db.insert(ingredientPricesTable).values({
       ingredientId: ingredient.id,
       price: initialPrice.toFixed(4),
       effectiveDate: today,
       reason: "Initial price",
+      loggedBy: auth?.userId ?? null,
     });
   }
 
-  res.status(201).json(ingredient);
+  res.status(201).json({
+    ...ingredient,
+    priceTier1: ingredient.priceTier1 ? parseFloat(ingredient.priceTier1) : null,
+    priceTier2: ingredient.priceTier2 ? parseFloat(ingredient.priceTier2) : null,
+  });
 });
 
 router.get("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
@@ -100,23 +112,33 @@ router.get("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
 
   const currentPrice = await getCurrentPrice(ingredient.id);
 
-  const [priceRow] = await db
-    .select({ effectiveDate: ingredientPricesTable.effectiveDate })
+  const priceRows = await db
+    .select({ effectiveDate: ingredientPricesTable.effectiveDate, price: ingredientPricesTable.price })
     .from(ingredientPricesTable)
     .where(eq(ingredientPricesTable.ingredientId, ingredient.id))
     .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-    .limit(1);
+    .limit(2);
 
   const [countRow] = await db
     .select({ count: sql<number>`count(distinct ${costLinesTable.skuId})` })
     .from(costLinesTable)
     .where(eq(costLinesTable.ingredientId, ingredient.id));
 
+  const previousPrice = priceRows[1] ? parseFloat(priceRows[1].price) : null;
+  const priceChangePct =
+    previousPrice && currentPrice !== null && previousPrice !== 0
+      ? ((currentPrice - previousPrice) / previousPrice) * 100
+      : null;
+
   res.json({
     ...ingredient,
+    priceTier1: ingredient.priceTier1 ? parseFloat(ingredient.priceTier1) : null,
+    priceTier2: ingredient.priceTier2 ? parseFloat(ingredient.priceTier2) : null,
     currentPrice,
-    priceEffectiveDate: priceRow?.effectiveDate ?? null,
+    priceEffectiveDate: priceRows[0]?.effectiveDate ?? null,
     skuCount: Number(countRow?.count ?? 0),
+    previousPrice,
+    priceChangePct,
   });
 });
 
@@ -143,15 +165,28 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  const { name, supplier } = req.body;
-  if (!name || typeof name !== "string" || !name.trim()) {
-    res.status(400).json({ error: "Name is required" });
-    return;
+  const { name, supplier, subCategory, description, priceTier1, priceTier1Description, priceTier2, priceTier2Description, notes } = req.body;
+
+  const updateData: Record<string, any> = {};
+  if (name !== undefined) {
+    if (!name || typeof name !== "string" || !name.trim()) {
+      res.status(400).json({ error: "Name cannot be empty" });
+      return;
+    }
+    updateData.name = name.trim();
   }
+  if (supplier !== undefined) updateData.supplier = supplier?.trim() || null;
+  if (subCategory !== undefined) updateData.subCategory = subCategory?.trim() || null;
+  if (description !== undefined) updateData.description = description?.trim() || null;
+  if (priceTier1 !== undefined) updateData.priceTier1 = priceTier1 != null ? String(priceTier1) : null;
+  if (priceTier1Description !== undefined) updateData.priceTier1Description = priceTier1Description || null;
+  if (priceTier2 !== undefined) updateData.priceTier2 = priceTier2 != null ? String(priceTier2) : null;
+  if (priceTier2Description !== undefined) updateData.priceTier2Description = priceTier2Description || null;
+  if (notes !== undefined) updateData.notes = notes || null;
 
   const [updated] = await db
     .update(ingredientsTable)
-    .set({ name: name.trim(), supplier: supplier?.trim() || null })
+    .set(updateData)
     .where(eq(ingredientsTable.id, id))
     .returning();
 
@@ -160,7 +195,11 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  res.json(updated);
+  res.json({
+    ...updated,
+    priceTier1: updated.priceTier1 ? parseFloat(updated.priceTier1) : null,
+    priceTier2: updated.priceTier2 ? parseFloat(updated.priceTier2) : null,
+  });
 });
 
 router.post("/ingredients/:id/price", requireAuth, async (req, res): Promise<void> => {
@@ -225,6 +264,51 @@ router.get("/ingredients/:id/price-history", requireAuth, async (req, res): Prom
       price: parseFloat(h.price),
     }))
   );
+});
+
+router.get("/ingredients/:id/attachments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ingredient id" });
+    return;
+  }
+
+  const attachments = await db
+    .select()
+    .from(ingredientAttachmentsTable)
+    .where(eq(ingredientAttachmentsTable.ingredientId, id))
+    .orderBy(desc(ingredientAttachmentsTable.uploadedAt));
+
+  res.json(attachments);
+});
+
+router.post("/ingredients/:id/attachments", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ingredient id" });
+    return;
+  }
+
+  const { fileName, objectPath, fileType } = req.body;
+  if (!fileName || !objectPath) {
+    res.status(400).json({ error: "fileName and objectPath are required" });
+    return;
+  }
+
+  const auth = getAuth(req);
+
+  const [attachment] = await db
+    .insert(ingredientAttachmentsTable)
+    .values({
+      ingredientId: id,
+      fileName,
+      objectPath,
+      fileType: fileType ?? null,
+      uploadedBy: auth?.userId ?? null,
+    })
+    .returning();
+
+  res.status(201).json(attachment);
 });
 
 export default router;

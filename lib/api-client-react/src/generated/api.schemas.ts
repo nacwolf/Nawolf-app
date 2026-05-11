@@ -17,9 +17,25 @@ export interface Ingredient {
   id: number;
   name: string;
   category: string;
+  /** @nullable */
+  subCategory?: string | null;
+  /** @nullable */
+  description?: string | null;
   unit: string;
   /** @nullable */
   supplier?: string | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier1Description?: string | null;
+  /** @nullable */
+  priceTier2?: number | null;
+  /** @nullable */
+  priceTier2Description?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
   createdAt: string;
 }
 
@@ -27,15 +43,35 @@ export interface IngredientWithPrice {
   id: number;
   name: string;
   category: string;
+  /** @nullable */
+  subCategory?: string | null;
+  /** @nullable */
+  description?: string | null;
   unit: string;
   /** @nullable */
   supplier?: string | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier1Description?: string | null;
+  /** @nullable */
+  priceTier2?: number | null;
+  /** @nullable */
+  priceTier2Description?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
   createdAt: string;
   /** @nullable */
   currentPrice?: number | null;
   /** @nullable */
   priceEffectiveDate?: string | null;
   skuCount: number;
+  /** @nullable */
+  previousPrice?: number | null;
+  /** @nullable */
+  priceChangePct?: number | null;
 }
 
 export interface IngredientPrice {
@@ -50,14 +86,70 @@ export interface IngredientPrice {
   createdAt: string;
 }
 
+export interface IngredientAttachment {
+  id: number;
+  ingredientId: number;
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileType?: string | null;
+  /** @nullable */
+  uploadedBy?: string | null;
+  uploadedAt: string;
+}
+
+export interface CreateIngredientAttachmentBody {
+  fileName: string;
+  objectPath: string;
+  /** @nullable */
+  fileType?: string | null;
+}
+
 export interface CreateIngredientBody {
   name: string;
   category: string;
+  /** @nullable */
+  subCategory?: string | null;
+  /** @nullable */
+  description?: string | null;
   unit: string;
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
   initialPrice?: number | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier1Description?: string | null;
+  /** @nullable */
+  priceTier2?: number | null;
+  /** @nullable */
+  priceTier2Description?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+}
+
+export interface UpdateIngredientBody {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  subCategory?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  priceTier1?: number | null;
+  /** @nullable */
+  priceTier1Description?: string | null;
+  /** @nullable */
+  priceTier2?: number | null;
+  /** @nullable */
+  priceTier2Description?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface UpdateIngredientPriceBody {
@@ -70,6 +162,20 @@ export interface UpdateIngredientPriceBody {
 export interface UpdateIngredientPriceResponse {
   ingredientPrice: IngredientPrice;
   affectedSkuCount: number;
+}
+
+export interface UploadUrlRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
 }
 
 export interface Sku {

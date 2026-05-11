@@ -15,6 +15,8 @@ tags:
     description: SKU management
   - name: dashboard
     description: Dashboard analytics
+  - name: Storage
+    description: Object storage upload and serving endpoints.
 
 paths:
   /healthz:
@@ -86,6 +88,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateIngredient
+      tags: [ingredients]
+      summary: Update ingredient fields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIngredientBody"
+      responses:
+        "200":
+          description: Updated ingredient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ingredient"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /ingredients/{id}/price:
     post:
@@ -138,6 +169,133 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/IngredientPrice"
+
+  /ingredients/{id}/attachments:
+    get:
+      operationId: listIngredientAttachments
+      tags: [ingredients]
+      summary: List attachments for an ingredient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngredientAttachment"
+    post:
+      operationId: createIngredientAttachment
+      tags: [ingredients]
+      summary: Record a file attachment for an ingredient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIngredientAttachmentBody"
+      responses:
+        "201":
+          description: Created attachment record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientAttachment"
+
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadUrlRequest'
+      responses:
+        '200':
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /skus:
     get:
@@ -374,9 +532,25 @@ components:
           type: string
         category:
           type: string
+        subCategory:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
         unit:
           type: string
         supplier:
+          type: ["string", "null"]
+        priceTier1:
+          type: ["number", "null"]
+        priceTier1Description:
+          type: ["string", "null"]
+        priceTier2:
+          type: ["number", "null"]
+        priceTier2Description:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdBy:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -396,9 +570,25 @@ components:
           type: string
         category:
           type: string
+        subCategory:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
         unit:
           type: string
         supplier:
+          type: ["string", "null"]
+        priceTier1:
+          type: ["number", "null"]
+        priceTier1Description:
+          type: ["string", "null"]
+        priceTier2:
+          type: ["number", "null"]
+        priceTier2Description:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdBy:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -408,6 +598,10 @@ components:
           type: ["string", "null"]
         skuCount:
           type: integer
+        previousPrice:
+          type: ["number", "null"]
+        priceChangePct:
+          type: ["number", "null"]
       required:
         - id
         - name
@@ -440,6 +634,43 @@ components:
         - effectiveDate
         - createdAt
 
+    IngredientAttachment:
+      type: object
+      properties:
+        id:
+          type: integer
+        ingredientId:
+          type: integer
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileType:
+          type: ["string", "null"]
+        uploadedBy:
+          type: ["string", "null"]
+        uploadedAt:
+          type: string
+      required:
+        - id
+        - ingredientId
+        - fileName
+        - objectPath
+        - uploadedAt
+
+    CreateIngredientAttachmentBody:
+      type: object
+      properties:
+        fileName:
+          type: string
+        objectPath:
+          type: string
+        fileType:
+          type: ["string", "null"]
+      required:
+        - fileName
+        - objectPath
+
     CreateIngredientBody:
       type: object
       properties:
@@ -447,16 +678,54 @@ components:
           type: string
         category:
           type: string
+        subCategory:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
         unit:
           type: string
         supplier:
           type: ["string", "null"]
         initialPrice:
           type: ["number", "null"]
+        priceTier1:
+          type: ["number", "null"]
+        priceTier1Description:
+          type: ["string", "null"]
+        priceTier2:
+          type: ["number", "null"]
+        priceTier2Description:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdBy:
+          type: ["string", "null"]
       required:
         - name
         - category
         - unit
+
+    UpdateIngredientBody:
+      type: object
+      properties:
+        name:
+          type: ["string", "null"]
+        subCategory:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        supplier:
+          type: ["string", "null"]
+        priceTier1:
+          type: ["number", "null"]
+        priceTier1Description:
+          type: ["string", "null"]
+        priceTier2:
+          type: ["number", "null"]
+        priceTier2Description:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
 
     UpdateIngredientPriceBody:
       type: object
@@ -481,6 +750,30 @@ components:
       required:
         - ingredientPrice
         - affectedSkuCount
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+        contentType:
+          type: string
+          minLength: 1
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
 
     Sku:
       type: object

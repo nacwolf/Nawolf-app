@@ -7,6 +7,7 @@ import activityRouter from "./activity";
 import teamMembersRouter from "./team-members";
 import productionRouter from "./production";
 import overheadRouter from "./overhead";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(activityRouter);
 router.use(teamMembersRouter);
 router.use(productionRouter);
 router.use(overheadRouter);
+router.use(storageRouter);
 
 export default router;
