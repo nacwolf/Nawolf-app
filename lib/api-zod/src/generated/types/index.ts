@@ -7,6 +7,7 @@
  */
 
 export * from "./addCostLineBody";
+export * from "./editIngredientPriceBody";
 export * from "./costLine";
 export * from "./createIngredientAttachmentBody";
 export * from "./createIngredientBody";
