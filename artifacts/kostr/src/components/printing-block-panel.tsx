@@ -9,6 +9,7 @@ import {
   useListPrintingBlockSuppliers,
   getGetSkuQueryKey,
   getGetSkuPrintingBlockConfigQueryKey,
+  getListSkuPrintingBlockConfigsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
 
   function invalidateAll() {
     qc.invalidateQueries({ queryKey: getGetSkuPrintingBlockConfigQueryKey(skuId) });
+    qc.invalidateQueries({ queryKey: getListSkuPrintingBlockConfigsQueryKey(skuId) });
     qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
   }
 
@@ -248,13 +250,25 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
                       No printing block config yet. Add one to include the amortized block cost in COGS.
                     </p>
                   )}
-                  {(suppliers?.length ?? 0) === 0 ? (
-                    <p className="text-xs text-muted-foreground">First add a supplier in the Cost Library.</p>
-                  ) : (
-                    <Button size="sm" onClick={openConfigForm}>
-                      {lastRetired ? "Add new block config" : "Configure printing blocks"}
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(suppliers?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground">First add a supplier in the Cost Library.</p>
+                    ) : (
+                      <Button size="sm" onClick={openConfigForm}>
+                        {lastRetired ? "Add new block config" : "Configure printing blocks"}
+                      </Button>
+                    )}
+                    {lastRetired && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive ml-auto"
+                        onClick={handleDelete}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove config
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )
             )}
@@ -353,7 +367,7 @@ export function PrintingBlockPanel({ skuId }: PrintingBlockPanelProps) {
                       <tbody className="divide-y">
                         {retiredConfigs.map(c => (
                           <tr key={c.id}>
-                            <td className="px-3 py-2 font-medium">{(c as any).supplierName ?? `Supplier #${c.supplierId}`}</td>
+                            <td className="px-3 py-2 font-medium">{c.supplierName}</td>
                             <td className="px-3 py-2 text-right">{c.numBlocks}</td>
                             <td className="px-3 py-2 text-right">{c.moq.toLocaleString()}</td>
                             <td className="px-3 py-2 text-muted-foreground">
