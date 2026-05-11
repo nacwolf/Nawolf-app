@@ -206,20 +206,24 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
   }
 
   const auth = getAuth(req);
-  const { name, supplier, subCategory, description, priceTier1, priceTier1Description, priceTier2, priceTier2Description, notes } = req.body;
 
-  const updateData: Record<string, any> = {};
-  if (name !== undefined) {
-    if (!name || typeof name !== "string" || !name.trim()) {
-      res.status(400).json({ error: "Name cannot be empty" });
-      return;
-    }
-    updateData.name = name.trim();
+  interface PatchBody {
+    name?: string;
+    supplier?: string | null;
+    subCategory?: string | null;
+    description?: string | null;
+    notes?: string | null;
+    priceTier1?: number | null;
+    priceTier1Description?: string | null;
+    priceTier2?: number | null;
+    priceTier2Description?: string | null;
   }
-  if (supplier !== undefined) updateData.supplier = supplier?.trim() || null;
-  if (subCategory !== undefined) updateData.subCategory = subCategory?.trim() || null;
-  if (description !== undefined) updateData.description = description?.trim() || null;
-  if (notes !== undefined) updateData.notes = notes || null;
+  const body = req.body as PatchBody;
+
+  if (body.name !== undefined && (typeof body.name !== "string" || !body.name.trim())) {
+    res.status(400).json({ error: "Name cannot be empty" });
+    return;
+  }
 
   const [current] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, id));
   if (!current) {
@@ -227,34 +231,42 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  type IngredientUpdate = Partial<typeof ingredientsTable.$inferInsert>;
+  const updateData: IngredientUpdate = {};
+
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.supplier !== undefined) updateData.supplier = body.supplier?.trim() || null;
+  if (body.subCategory !== undefined) updateData.subCategory = body.subCategory?.trim() || null;
+  if (body.description !== undefined) updateData.description = body.description?.trim() || null;
+  if (body.notes !== undefined) updateData.notes = body.notes || null;
+
   const tierChanges: Array<{ tier: string; oldPrice: string | null; newPrice: string | null; oldDesc: string | null; newDesc: string | null }> = [];
 
-  if (priceTier1 !== undefined) {
-    const newVal = priceTier1 != null ? String(priceTier1) : null;
-    const oldVal = current.priceTier1;
-    if (oldVal !== newVal) {
-      tierChanges.push({ tier: "tier1", oldPrice: oldVal, newPrice: newVal, oldDesc: current.priceTier1Description, newDesc: priceTier1Description ?? current.priceTier1Description ?? null });
-    }
-    updateData.priceTier1 = newVal;
-  }
-  if (priceTier1Description !== undefined && priceTier1 === undefined) {
-    updateData.priceTier1Description = priceTier1Description || null;
-  } else if (priceTier1Description !== undefined) {
-    updateData.priceTier1Description = priceTier1Description || null;
-  }
+  const newTier1Price = body.priceTier1 !== undefined ? (body.priceTier1 != null ? String(body.priceTier1) : null) : undefined;
+  const newTier1Desc = body.priceTier1Description !== undefined ? (body.priceTier1Description || null) : undefined;
+  const newTier2Price = body.priceTier2 !== undefined ? (body.priceTier2 != null ? String(body.priceTier2) : null) : undefined;
+  const newTier2Desc = body.priceTier2Description !== undefined ? (body.priceTier2Description || null) : undefined;
 
-  if (priceTier2 !== undefined) {
-    const newVal = priceTier2 != null ? String(priceTier2) : null;
-    const oldVal = current.priceTier2;
-    if (oldVal !== newVal) {
-      tierChanges.push({ tier: "tier2", oldPrice: oldVal, newPrice: newVal, oldDesc: current.priceTier2Description, newDesc: priceTier2Description ?? current.priceTier2Description ?? null });
-    }
-    updateData.priceTier2 = newVal;
+  if (newTier1Price !== undefined) updateData.priceTier1 = newTier1Price;
+  if (newTier1Desc !== undefined) updateData.priceTier1Description = newTier1Desc;
+  if (newTier2Price !== undefined) updateData.priceTier2 = newTier2Price;
+  if (newTier2Desc !== undefined) updateData.priceTier2Description = newTier2Desc;
+
+  const effectiveTier1Price = newTier1Price !== undefined ? newTier1Price : current.priceTier1;
+  const effectiveTier1Desc = newTier1Desc !== undefined ? newTier1Desc : current.priceTier1Description;
+  const effectiveTier2Price = newTier2Price !== undefined ? newTier2Price : current.priceTier2;
+  const effectiveTier2Desc = newTier2Desc !== undefined ? newTier2Desc : current.priceTier2Description;
+
+  const tier1Changed = (newTier1Price !== undefined && newTier1Price !== current.priceTier1) ||
+    (newTier1Desc !== undefined && newTier1Desc !== current.priceTier1Description);
+  const tier2Changed = (newTier2Price !== undefined && newTier2Price !== current.priceTier2) ||
+    (newTier2Desc !== undefined && newTier2Desc !== current.priceTier2Description);
+
+  if (tier1Changed) {
+    tierChanges.push({ tier: "tier1", oldPrice: current.priceTier1, newPrice: effectiveTier1Price, oldDesc: current.priceTier1Description, newDesc: effectiveTier1Desc });
   }
-  if (priceTier2Description !== undefined && priceTier2 === undefined) {
-    updateData.priceTier2Description = priceTier2Description || null;
-  } else if (priceTier2Description !== undefined) {
-    updateData.priceTier2Description = priceTier2Description || null;
+  if (tier2Changed) {
+    tierChanges.push({ tier: "tier2", oldPrice: current.priceTier2, newPrice: effectiveTier2Price, oldDesc: current.priceTier2Description, newDesc: effectiveTier2Desc });
   }
 
   const [updated] = await db

@@ -154,8 +154,9 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
 
       toast({ title: "Item added successfully" });
       setLocation(`/ingredients/${ingredient.id}`);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: err.message || "Failed to save" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save";
+      toast({ variant: "destructive", title: message });
     } finally {
       setIsSaving(false);
       setIsUploading(false);

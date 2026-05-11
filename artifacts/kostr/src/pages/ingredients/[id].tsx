@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -77,18 +77,35 @@ export default function IngredientDetail({ id }: { id: string }) {
 
   const editForm = useForm<z.infer<typeof editSchema>>({
     resolver: zodResolver(editSchema),
-    values: {
-      name: ingredient?.name ?? "",
-      subCategory: ingredient?.subCategory ?? "",
-      description: ingredient?.description ?? "",
-      supplier: ingredient?.supplier ?? "",
-      priceTier1: ingredient?.priceTier1 ?? undefined,
-      priceTier1Description: ingredient?.priceTier1Description ?? "",
-      priceTier2: ingredient?.priceTier2 ?? undefined,
-      priceTier2Description: ingredient?.priceTier2Description ?? "",
-      notes: ingredient?.notes ?? "",
+    defaultValues: {
+      name: "",
+      subCategory: "",
+      description: "",
+      supplier: "",
+      priceTier1: undefined,
+      priceTier1Description: "",
+      priceTier2: undefined,
+      priceTier2Description: "",
+      notes: "",
     },
   });
+
+  useEffect(() => {
+    if (ingredient) {
+      editForm.reset({
+        name: ingredient.name,
+        subCategory: ingredient.subCategory ?? "",
+        description: ingredient.description ?? "",
+        supplier: ingredient.supplier ?? "",
+        priceTier1: ingredient.priceTier1 ?? undefined,
+        priceTier1Description: ingredient.priceTier1Description ?? "",
+        priceTier2: ingredient.priceTier2 ?? undefined,
+        priceTier2Description: ingredient.priceTier2Description ?? "",
+        notes: ingredient.notes ?? "",
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ingredient?.id]);
 
   const priceForm = useForm<z.infer<typeof priceSchema>>({
     resolver: zodResolver(priceSchema),
