@@ -17,9 +17,7 @@ export default function Home() {
             <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-foreground">
               Precision Margin Tracking for Manufacturers
             </h1>
-            <p className="text-xl text-muted-foreground max-w-xl mx-auto">
-              Kostr gives factory floor accountants and production managers exact visibility into SKU costs, ingredient price changes, and margin health.
-            </p>
+            <p className="text-xl text-muted-foreground max-w-xl mx-auto">Kostr gives your production managers exact visibility into SKU costs, ingredient price changes, and margin health.</p>
             <div className="flex items-center justify-center gap-4 pt-4">
               <Button asChild size="lg" className="text-lg px-8">
                 <Link href="/sign-up">Get Started</Link>
