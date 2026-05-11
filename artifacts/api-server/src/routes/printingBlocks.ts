@@ -244,15 +244,15 @@ router.post("/skus/:id/printing-block-config", requireAuth, async (req, res): Pr
     return;
   }
 
-  if (!supplierId || typeof supplierId !== "number") {
-    res.status(400).json({ error: "supplierId is required and must be a number" });
+  if (!supplierId || typeof supplierId !== "number" || !Number.isInteger(supplierId) || supplierId < 1) {
+    res.status(400).json({ error: "supplierId is required and must be a positive integer" });
     return;
   }
-  if (!numBlocks || typeof numBlocks !== "number" || numBlocks < 1) {
+  if (!numBlocks || typeof numBlocks !== "number" || !Number.isInteger(numBlocks) || numBlocks < 1) {
     res.status(400).json({ error: "numBlocks must be a positive integer" });
     return;
   }
-  if (!moq || typeof moq !== "number" || moq < 1) {
+  if (!moq || typeof moq !== "number" || !Number.isInteger(moq) || moq < 1) {
     res.status(400).json({ error: "moq must be a positive integer" });
     return;
   }
@@ -308,7 +308,7 @@ router.post("/skus/:id/printing-block-config/retire", requireAuth, async (req, r
   }
 
   const auth = getAuth(req);
-  const { reason } = req.body;
+  const { reason } = req.body ?? {};
 
   const [sku] = await db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.id, skuId)).limit(1);
   if (!sku) {
