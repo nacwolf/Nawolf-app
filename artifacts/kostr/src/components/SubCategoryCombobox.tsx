@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -32,19 +31,22 @@ export function SubCategoryCombobox({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const normalizedSearch = search.trim().toLowerCase();
-  const exactMatch = options.some(o => o.toLowerCase() === normalizedSearch);
-  const showCreate = normalizedSearch.length > 0 && !exactMatch;
+  const trimmed = search.trim();
+  const filtered = trimmed
+    ? options.filter(o => o.toLowerCase().includes(trimmed.toLowerCase()))
+    : options;
+
+  const showCreate = trimmed.length > 0 && filtered.length === 0;
 
   function handleSelect(selected: string) {
-    onChange(selected === value ? "" : selected);
+    onChange(selected);
     setOpen(false);
     setSearch("");
   }
 
   function handleCreate() {
-    if (search.trim()) {
-      onChange(search.trim());
+    if (trimmed) {
+      onChange(trimmed);
       setOpen(false);
       setSearch("");
     }
@@ -66,7 +68,7 @@ export function SubCategoryCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search or type new..."
             value={search}
@@ -76,20 +78,20 @@ export function SubCategoryCombobox({
             {showCreate && (
               <CommandGroup>
                 <CommandItem
-                  value={`__create__${search}`}
+                  value={`__create__${trimmed}`}
                   onSelect={handleCreate}
                   className="gap-2"
                 >
                   <PlusCircle className="h-4 w-4 text-muted-foreground" />
                   <span>
-                    Create: <span className="font-medium">{search.trim()}</span>
+                    Create: <span className="font-medium">{trimmed}</span>
                   </span>
                 </CommandItem>
               </CommandGroup>
             )}
-            {options.length > 0 && (
-              <CommandGroup heading={options.length > 0 ? "Existing" : undefined}>
-                {options.map(opt => (
+            {filtered.length > 0 && (
+              <CommandGroup>
+                {filtered.map(opt => (
                   <CommandItem
                     key={opt}
                     value={opt}
@@ -107,8 +109,12 @@ export function SubCategoryCombobox({
                 ))}
               </CommandGroup>
             )}
-            {!showCreate && options.length === 0 && (
-              <CommandEmpty>No sub-categories yet. Type to create one.</CommandEmpty>
+            {!showCreate && filtered.length === 0 && options.length === 0 && (
+              <CommandGroup>
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No sub-categories yet. Type to create one.
+                </div>
+              </CommandGroup>
             )}
           </CommandList>
         </Command>
