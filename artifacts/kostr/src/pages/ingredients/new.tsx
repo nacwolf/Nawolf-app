@@ -137,7 +137,7 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
         for (const pf of pendingFiles) {
           try {
             const objectPath = await uploadFile(pf.file);
-            await fetch(getApiUrl(`/ingredients/${ingredient.id}/attachments`), {
+            const attachRes = await fetch(getApiUrl(`/ingredients/${ingredient.id}/attachments`), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -146,6 +146,10 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
                 fileType: pf.file.type,
               }),
             });
+            if (!attachRes.ok) {
+              const body = await attachRes.json().catch(() => ({})) as { error?: string };
+              throw new Error(body.error || "Failed to register attachment");
+            }
           } catch {
             toast({ variant: "destructive", title: `Failed to upload ${pf.file.name}` });
           }

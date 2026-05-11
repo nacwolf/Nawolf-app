@@ -122,6 +122,8 @@ export const UpdateIngredientParams = zod.object({
 
 export const UpdateIngredientBody = zod.object({
   name: zod.string().nullish(),
+  category: zod.string().nullish(),
+  unit: zod.string().nullish(),
   subCategory: zod.string().nullish(),
   description: zod.string().nullish(),
   supplier: zod.string().nullish(),

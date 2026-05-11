@@ -200,7 +200,7 @@ export default function IngredientDetail({ id }: { id: string }) {
     for (const pf of pendingFiles) {
       try {
         const objectPath = await uploadFile(pf.file);
-        await fetch(getApiUrl(`/ingredients/${ingredientId}/attachments`), {
+        const attachRes = await fetch(getApiUrl(`/ingredients/${ingredientId}/attachments`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -210,6 +210,10 @@ export default function IngredientDetail({ id }: { id: string }) {
             uploadedBy: user?.fullName || user?.username || user?.id || null,
           }),
         });
+        if (!attachRes.ok) {
+          const body = await attachRes.json().catch(() => ({})) as { error?: string };
+          throw new Error(body.error || "Failed to register attachment");
+        }
         successCount++;
       } catch {
         toast({ variant: "destructive", title: `Failed to upload ${pf.file.name}` });
