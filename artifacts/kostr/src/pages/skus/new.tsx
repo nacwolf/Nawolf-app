@@ -3,14 +3,14 @@ import { useLocation } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useCreateSku, useListIngredients } from "@workspace/api-client-react";
+import { useCreateSku, useListIngredients, useListPrintingBlockSuppliers, useSetSkuPrintingBlockConfig } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, ChevronDown, ChevronUp, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
@@ -47,7 +47,14 @@ export default function SkuNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { data: ingredients } = useListIngredients();
+  const { data: blockSuppliers } = useListPrintingBlockSuppliers();
   const createSku = useCreateSku();
+  const setBlockConfig = useSetSkuPrintingBlockConfig();
+
+  const [blockSectionOpen, setBlockSectionOpen] = useState(false);
+  const [blockSupplierId, setBlockSupplierId] = useState<string>("");
+  const [blockNumBlocks, setBlockNumBlocks] = useState<string>("");
+  const [blockMoq, setBlockMoq] = useState<string>("");
 
   const form = useForm<SkuFormValues>({
     resolver: zodResolver(skuFormSchema),
@@ -94,9 +101,20 @@ export default function SkuNew() {
     return { totalCogs, byCategory };
   }, [watchCostLines, ingredients]);
 
-  const margin = watchSellPrice > 0 ? (watchSellPrice - liveCalc.totalCogs) / watchSellPrice : 0;
+  const blockAmortizedCost = useMemo(() => {
+    if (!blockSupplierId || !blockNumBlocks || !blockMoq) return 0;
+    const supplier = blockSuppliers?.find(s => s.id === parseInt(blockSupplierId, 10));
+    if (!supplier) return 0;
+    const nb = parseInt(blockNumBlocks, 10);
+    const m = parseInt(blockMoq, 10);
+    if (!nb || !m || nb < 1 || m < 1) return 0;
+    return (nb * supplier.pricePerBlock) / m;
+  }, [blockSupplierId, blockNumBlocks, blockMoq, blockSuppliers]);
+
+  const totalCogsWithBlocks = liveCalc.totalCogs + blockAmortizedCost;
+  const margin = watchSellPrice > 0 ? (watchSellPrice - totalCogsWithBlocks) / watchSellPrice : 0;
   const marginStatus = margin > 0.25 ? "healthy" : margin > 0.1 ? "review" : "critical";
-  const targetPrice30 = liveCalc.totalCogs > 0 ? liveCalc.totalCogs / 0.70 : null;
+  const targetPrice30 = totalCogsWithBlocks > 0 ? totalCogsWithBlocks / 0.70 : null;
 
   const categoryBreakdown = Object.entries(liveCalc.byCategory).map(([name, value]) => ({
     name,
@@ -113,6 +131,20 @@ export default function SkuNew() {
           costLines: data.costLines?.map(l => ({ ...l, notes: l.notes || null }))
         }
       });
+      if (blockSupplierId && blockNumBlocks && blockMoq) {
+        try {
+          await setBlockConfig.mutateAsync({
+            id: res.id,
+            data: {
+              supplierId: parseInt(blockSupplierId, 10),
+              numBlocks: parseInt(blockNumBlocks, 10),
+              moq: parseInt(blockMoq, 10),
+            }
+          });
+        } catch {
+          toast({ variant: "destructive", title: "SKU created but block config failed", description: "You can set it on the SKU detail page." });
+        }
+      }
       toast({ title: "SKU Created", description: `${res.skuCode} was created successfully.` });
       setLocation(`/skus/${res.id}`);
     } catch {
@@ -187,6 +219,88 @@ export default function SkuNew() {
                     </FormItem>
                   )} />
                 </CardContent>
+              </Card>
+
+              <Card className="border-l-4 border-l-purple-500">
+                <button
+                  type="button"
+                  className="w-full px-6 py-4 bg-purple-50 flex items-center justify-between gap-3 rounded-t-xl"
+                  onClick={() => setBlockSectionOpen(o => !o)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Printer className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                    <div className="text-left">
+                      <div className="text-sm font-bold uppercase tracking-wider text-purple-700">Printing Blocks</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {blockAmortizedCost > 0
+                          ? `Amortized cost: ${formatCurrency(blockAmortizedCost)}/unit`
+                          : "Optional — include amortized block costs in COGS"}
+                      </div>
+                    </div>
+                  </div>
+                  {blockSectionOpen
+                    ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                    : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {blockSectionOpen && (
+                  <CardContent className="pt-4 space-y-3">
+                    {(blockSuppliers?.length ?? 0) === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No printing block suppliers yet. Add one in the Cost Library first.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Supplier</label>
+                            <Select value={blockSupplierId} onValueChange={setBlockSupplierId}>
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Select supplier..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {blockSuppliers?.map(s => (
+                                  <SelectItem key={s.id} value={String(s.id)}>
+                                    {s.name} ({formatCurrency(s.pricePerBlock)}/block)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Number of blocks</label>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="e.g. 4"
+                              value={blockNumBlocks}
+                              onChange={e => setBlockNumBlocks(e.target.value)}
+                              className="h-9"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">MOQ (units)</label>
+                            <Input
+                              type="number"
+                              min="1"
+                              step="1"
+                              placeholder="e.g. 5000"
+                              value={blockMoq}
+                              onChange={e => setBlockMoq(e.target.value)}
+                              className="h-9"
+                            />
+                          </div>
+                        </div>
+                        {blockAmortizedCost > 0 && (
+                          <div className="text-sm text-purple-700 font-medium bg-purple-50 rounded px-3 py-2">
+                            Printing Blocks (amortized over {parseInt(blockMoq, 10).toLocaleString()} units):{" "}
+                            <span className="font-bold">{formatCurrency(blockAmortizedCost)}/unit</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                )}
               </Card>
 
               <Card>
@@ -286,12 +400,22 @@ export default function SkuNew() {
                         <span className="font-medium">{formatCurrency(watchSellPrice || 0)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Total COGS</span>
+                        <span className="text-muted-foreground">Ingredients COGS</span>
                         <span className="font-medium">{formatCurrency(liveCalc.totalCogs)}</span>
+                      </div>
+                      {blockAmortizedCost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground text-purple-700">Printing Blocks</span>
+                          <span className="font-medium text-purple-700">{formatCurrency(blockAmortizedCost)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-semibold border-t pt-1">
+                        <span className="text-muted-foreground">Total COGS</span>
+                        <span>{formatCurrency(totalCogsWithBlocks)}</span>
                       </div>
                       <div className="border-t pt-2 flex justify-between">
                         <span className="text-sm text-muted-foreground">Margin €/unit</span>
-                        <span className="font-semibold">{formatCurrency(watchSellPrice - liveCalc.totalCogs)}</span>
+                        <span className="font-semibold">{formatCurrency(watchSellPrice - totalCogsWithBlocks)}</span>
                       </div>
                     </div>
 

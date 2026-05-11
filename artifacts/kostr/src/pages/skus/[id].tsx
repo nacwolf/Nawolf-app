@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useGetSku, useUpdateSku, useAddSkuCostLine, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey } from "@workspace/api-client-react";
+import { PrintingBlockPanel } from "@/components/printing-block-panel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, formatPercent, formatDate, formatDateShort } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
@@ -822,6 +823,8 @@ export default function SkuDetail({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <PrintingBlockPanel skuId={skuId} />
 
       {/* ── Production Setup ── */}
       <TooltipProvider>

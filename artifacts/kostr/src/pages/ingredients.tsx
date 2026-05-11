@@ -1,6 +1,12 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { useListIngredients } from "@workspace/api-client-react";
+import {
+  useListIngredients,
+  useListPrintingBlockSuppliers,
+  useCreatePrintingBlockSupplier,
+  useUpdatePrintingBlockSupplier,
+  useDeletePrintingBlockSupplier,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -9,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Search, Plus, TrendingUp, TrendingDown, Minus, Users, Calculator, Info, Check, Loader2, ExternalLink } from "lucide-react";
+import { Search, Plus, TrendingUp, TrendingDown, Minus, Users, Calculator, Info, Check, Loader2, ExternalLink, Printer, Pencil, Trash2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useForm } from "react-hook-form";
@@ -54,6 +60,12 @@ const teamMemberSchema = z.object({
   oncostPercent: z.coerce.number().min(0).max(100).default(25),
 });
 
+const supplierSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  pricePerBlock: z.coerce.number().min(0.0001, "Must be > 0"),
+  notes: z.string().optional(),
+});
+
 interface TeamMember { id: number; name: string; roleDescription: string | null; hourlyWage: number; oncostPercent: number; loadedRate: number; isActive: boolean; }
 interface OverheadItem { id: number; name: string; monthlyAmount: number; frequency: string; sortOrder: number; isActive: boolean; }
 
@@ -66,10 +78,17 @@ export default function CostLibrary() {
   const [search, setSearch] = useState("");
   const [editTeamMember, setEditTeamMember] = useState<TeamMember | null>(null);
   const [addTeamOpen, setAddTeamOpen] = useState(false);
+  const [addSupplierOpen, setAddSupplierOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<{ id: number; name: string; pricePerBlock: number; notes: string | null } | null>(null);
 
   const teamMemberForm = useForm<z.infer<typeof teamMemberSchema>>({
     resolver: zodResolver(teamMemberSchema),
     defaultValues: { name: "", roleDescription: "", hourlyWage: 15, oncostPercent: 25 },
+  });
+
+  const supplierForm = useForm<z.infer<typeof supplierSchema>>({
+    resolver: zodResolver(supplierSchema),
+    defaultValues: { name: "", pricePerBlock: 0, notes: "" },
   });
 
   const { data: teamData, isLoading: teamLoading } = useQuery({
@@ -84,6 +103,11 @@ export default function CostLibrary() {
       return r.json() as Promise<{ items: OverheadItem[]; operatingDaysPerYear: number; daysPerMonth: number; totalMonthly: number }>;
     },
   });
+
+  const { data: suppliers, isLoading: supplierLoading } = useListPrintingBlockSuppliers();
+  const createSupplier = useCreatePrintingBlockSupplier();
+  const updateSupplier = useUpdatePrintingBlockSupplier();
+  const deleteSupplier = useDeletePrintingBlockSupplier();
 
   const [overheadEdits, setOverheadEdits] = useState<Record<number, string>>({});
   const [freqEdits, setFreqEdits] = useState<Record<number, string>>({});
@@ -141,6 +165,36 @@ export default function CostLibrary() {
     setEditTeamMember(null);
     setAddTeamOpen(false);
     teamMemberForm.reset();
+  }
+
+  async function handleSaveSupplier(data: z.infer<typeof supplierSchema>) {
+    try {
+      if (editingSupplier) {
+        await updateSupplier.mutateAsync({ id: editingSupplier.id, data: { name: data.name, pricePerBlock: data.pricePerBlock, notes: data.notes || null } });
+        toast({ title: "Supplier updated" });
+      } else {
+        await createSupplier.mutateAsync({ data: { name: data.name, pricePerBlock: data.pricePerBlock, notes: data.notes || null } });
+        toast({ title: "Supplier added" });
+      }
+      setAddSupplierOpen(false);
+      setEditingSupplier(null);
+      supplierForm.reset({ name: "", pricePerBlock: 0, notes: "" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to save supplier" });
+    }
+  }
+
+  async function handleDeleteSupplier(id: number) {
+    try {
+      await deleteSupplier.mutateAsync({ id });
+      toast({ title: "Supplier deleted" });
+    } catch (err: any) {
+      if (err?.response?.status === 409 || String(err).includes("409") || String(err?.message).includes("active")) {
+        toast({ variant: "destructive", title: "Supplier in use", description: "Remove all active block configs that use this supplier first." });
+      } else {
+        toast({ variant: "destructive", title: "Failed to delete supplier" });
+      }
+    }
   }
 
   async function handleApplyOverhead() {
@@ -357,6 +411,83 @@ export default function CostLibrary() {
           </CardContent>
         </Card>
 
+        {/* ── SECTION 3: PRINTING BLOCK SUPPLIERS ── */}
+        <Card className="border-l-4 border-l-purple-500 overflow-hidden">
+          <div className="px-6 py-4 bg-purple-50 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Printer className="w-4 h-4 text-purple-600 flex-shrink-0" />
+              <div>
+                <CardTitle className="text-sm font-bold uppercase tracking-wider text-purple-700">Printing Block Suppliers</CardTitle>
+                <CardDescription className="text-xs mt-0.5">Manage suppliers — price-per-block is amortized over the MOQ on each SKU</CardDescription>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingSupplier(null);
+                supplierForm.reset({ name: "", pricePerBlock: 0, notes: "" });
+                setAddSupplierOpen(true);
+              }}
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" /> Add supplier
+            </Button>
+          </div>
+          <CardContent className="p-0">
+            {supplierLoading ? (
+              <div className="p-6 space-y-2">
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (suppliers?.length ?? 0) === 0 ? (
+              <div className="py-10 text-center text-muted-foreground text-sm">
+                No printing block suppliers yet. Add one to configure block costs on SKUs.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="pl-6 text-xs font-medium">Supplier name</TableHead>
+                    <TableHead className="text-right text-xs font-medium pr-6">Price per block (฿)</TableHead>
+                    <TableHead className="text-xs font-medium pl-4">Notes</TableHead>
+                    <TableHead className="w-20" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suppliers?.map(s => (
+                    <TableRow key={s.id} className="group">
+                      <TableCell className="pl-6 font-medium">{s.name}</TableCell>
+                      <TableCell className="text-right font-semibold text-purple-700 pr-6">{formatCurrency(s.pricePerBlock)}</TableCell>
+                      <TableCell className="pl-4 text-sm text-muted-foreground">{s.notes || "—"}</TableCell>
+                      <TableCell className="pr-4">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => {
+                              setEditingSupplier({ id: s.id, name: s.name, pricePerBlock: s.pricePerBlock, notes: s.notes ?? null });
+                              supplierForm.reset({ name: s.name, pricePerBlock: s.pricePerBlock, notes: s.notes || "" });
+                              setAddSupplierOpen(true);
+                            }}
+                            className="p-1 rounded hover:bg-muted transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSupplier(s.id)}
+                            className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
         {/* ── INGREDIENT SECTIONS ── */}
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Materials &amp; Cost Elements</h2>
@@ -508,6 +639,50 @@ export default function CostLibrary() {
                 <div className="flex gap-2 pt-2">
                   <Button type="button" variant="ghost" className="flex-1" onClick={() => { setAddTeamOpen(false); setEditTeamMember(null); }}>Cancel</Button>
                   <Button type="submit" className="flex-1">Save</Button>
+                </div>
+              </form>
+            </Form>
+          </SheetContent>
+        </Sheet>
+
+        {/* ── PRINTING BLOCK SUPPLIER ADD/EDIT SHEET ── */}
+        <Sheet open={addSupplierOpen} onOpenChange={(o) => { if (!o) { setAddSupplierOpen(false); setEditingSupplier(null); } }}>
+          <SheetContent className="sm:max-w-md overflow-y-auto">
+            <SheetHeader className="pb-4">
+              <SheetTitle>{editingSupplier ? "Edit supplier" : "Add printing block supplier"}</SheetTitle>
+              <SheetDescription>Set the price per block once — it's amortized across the MOQ on each SKU that uses it.</SheetDescription>
+            </SheetHeader>
+            <Form {...supplierForm}>
+              <form onSubmit={supplierForm.handleSubmit(handleSaveSupplier)} className="space-y-4">
+                <FormField control={supplierForm.control} name="name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Supplier name</FormLabel>
+                    <FormControl><Input placeholder='e.g. "Bangkok Print Co"' {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={supplierForm.control} name="pricePerBlock" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Price per block (฿)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">฿</span>
+                        <Input type="number" step="0.01" min="0" className="pl-7" {...field} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={supplierForm.control} name="notes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl><Input placeholder="e.g. Min 2 blocks per order" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <div className="flex gap-2 pt-2">
+                  <Button type="button" variant="ghost" className="flex-1" onClick={() => { setAddSupplierOpen(false); setEditingSupplier(null); }}>Cancel</Button>
+                  <Button type="submit" className="flex-1" disabled={createSupplier.isPending || updateSupplier.isPending}>Save</Button>
                 </div>
               </form>
             </Form>
