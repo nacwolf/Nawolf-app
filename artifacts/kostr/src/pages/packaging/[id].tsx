@@ -578,10 +578,10 @@ function CategorySpecFields({ form, category, costPerRun }: { form: ReturnType<t
       {txtField("specBlockName", "Block Name")}
       {numField("specTotalBlockCost", "Total Block Cost (฿)")}
       {numField("specExpectedPrintRuns", "Expected Print Runs")}
-      <FormItem>
-        <FormLabel>Cost per Run (฿) — auto</FormLabel>
+      <div className="space-y-2">
+        <label className="text-sm font-medium leading-none">Cost per Run (฿) — auto</label>
         <Input readOnly value={costPerRun != null ? `฿${parseFloat(costPerRun).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}` : "—"} className="bg-muted" />
-      </FormItem>
+      </div>
       {txtField("specLinkedPackagingItem", "Linked Packaging Item")}
     </div>
   );
