@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 import {
   useListIngredients,
 } from "@workspace/api-client-react";
+import type { PackagingItem } from "@workspace/api-client-react";
+import { PACKAGING_CATEGORIES } from "./packaging";
 import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -65,6 +67,14 @@ export default function CostLibrary() {
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
   const { data: ingredients, isLoading: ingLoading } = useListIngredients();
+  const { data: packagingItems } = useQuery<PackagingItem[]>({
+    queryKey: ["/api/packaging"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/packaging"));
+      if (!r.ok) throw new Error("Failed");
+      return r.json();
+    },
+  });
 
   const [search, setSearch] = useState("");
   const [editTeamMember, setEditTeamMember] = useState<TeamMember | null>(null);
@@ -113,6 +123,17 @@ export default function CostLibrary() {
   const watchedWage = teamMemberForm.watch("hourlyWage");
   const watchedOncost = teamMemberForm.watch("oncostPercent");
   const previewLoadedRate = (parseFloat(String(watchedWage)) || 0) * (1 + (parseFloat(String(watchedOncost)) || 0) / 100);
+
+  const filteredPackaging = useMemo(() => {
+    if (!packagingItems) return packagingItems;
+    if (!search) return packagingItems;
+    const q = search.toLowerCase();
+    return packagingItems.filter(i =>
+      i.nameEnglish.toLowerCase().includes(q) ||
+      (i.nameThai || "").toLowerCase().includes(q) ||
+      (i.supplier || "").toLowerCase().includes(q)
+    );
+  }, [packagingItems, search]);
 
   const filteredIngredients = useMemo(() => {
     if (!search || !ingredients) return ingredients;
@@ -456,6 +477,69 @@ export default function CostLibrary() {
                 </Card>
               );
             })}
+
+            {/* ── PACKAGING ITEMS ── */}
+            <Card className="border-l-4 border-l-violet-500 overflow-hidden">
+              <div className="px-6 py-3 bg-violet-50 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-violet-700">Packaging</span>
+                  {packagingItems && packagingItems.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{packagingItems.length}</Badge>
+                  )}
+                </div>
+                <button
+                  onClick={() => setLocation("/packaging/new")}
+                  className="text-xs text-violet-700 hover:underline flex items-center gap-0.5"
+                >
+                  <Plus className="w-3 h-3" /> Add
+                </button>
+              </div>
+
+              {(filteredPackaging?.length ?? 0) === 0 ? (
+                <div className="py-6 text-center text-muted-foreground text-sm">
+                  No packaging items yet.{" "}
+                  <button onClick={() => setLocation("/packaging/new")} className="text-primary hover:underline">Add one →</button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                      <TableHead className="pl-6 text-xs font-medium">Name</TableHead>
+                      <TableHead className="text-xs font-medium">Category</TableHead>
+                      <TableHead className="text-xs font-medium">Supplier</TableHead>
+                      <TableHead className="text-right text-xs font-medium">Unit Cost (฿)</TableHead>
+                      <TableHead className="text-right text-xs font-medium">MOQ</TableHead>
+                      <TableHead className="w-8" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPackaging?.map(item => (
+                      <TableRow
+                        key={item.id}
+                        className="cursor-pointer hover:bg-muted/50 group"
+                        onClick={() => setLocation(`/packaging/${item.id}`)}
+                      >
+                        <TableCell className="pl-6">
+                          <div className="font-medium group-hover:text-primary transition-colors">{item.nameEnglish}</div>
+                          {item.nameThai && <div className="text-xs text-muted-foreground">{item.nameThai}</div>}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {PACKAGING_CATEGORIES.find(c => c.value === item.category)?.label ?? item.category}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{item.supplier || "—"}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {formatCurrency(item.unitCost)}/{item.unit}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-sm">{item.moq ?? "—"}</TableCell>
+                        <TableCell>
+                          <ExternalLink className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Card>
           </div>
         )}
 

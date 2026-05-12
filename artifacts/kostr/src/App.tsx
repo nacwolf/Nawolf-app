@@ -21,7 +21,6 @@ import IngredientDetail from "@/pages/ingredients/[id]";
 import ActivityFeed from "@/pages/activity";
 import TeamMembers from "@/pages/team-members";
 import NotFound from "@/pages/not-found";
-import PackagingList from "@/pages/packaging";
 import PackagingNew from "@/pages/packaging/new";
 import PackagingDetail from "@/pages/packaging/[id]";
 
@@ -143,7 +142,7 @@ function ClerkProviderWithRoutes() {
             </Route>
 
             <Route path="/packaging">
-              <ProtectedRoute component={PackagingList} />
+              <Redirect to="/ingredients" />
             </Route>
 
             <Route component={NotFound} />

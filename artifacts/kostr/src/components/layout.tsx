@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Activity,
   Users,
-  Box,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -72,15 +71,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <Link href="/ingredients">
                     <TestTubes className="w-4 h-4" />
                     <span>Cost Elements</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location.startsWith("/packaging")}>
-                  <Link href="/packaging">
-                    <Box className="w-4 h-4" />
-                    <span>Packaging</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
