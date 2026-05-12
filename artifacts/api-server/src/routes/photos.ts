@@ -15,23 +15,36 @@ function isValidObjectPath(v: unknown): v is string {
   return typeof v === "string" && v.startsWith("/objects/");
 }
 
+const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+
 router.patch("/skus/:id/photo", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { objectPath } = req.body;
+  const { objectPath, contentType } = req.body;
   if (!isValidObjectPath(objectPath)) {
     res.status(400).json({ error: "objectPath must start with /objects/" });
     return;
   }
-  const [sku] = await db.update(skusTable).set({ photoUrl: objectPath }).where(eq(skusTable.id, id)).returning({ photoUrl: skusTable.photoUrl });
+  const resolvedType = (ALLOWED_PHOTO_TYPES as readonly string[]).includes(contentType)
+    ? contentType as string
+    : null;
+  const [sku] = await db
+    .update(skusTable)
+    .set({ photoUrl: objectPath, photoContentType: resolvedType })
+    .where(eq(skusTable.id, id))
+    .returning({ photoUrl: skusTable.photoUrl, photoContentType: skusTable.photoContentType });
   if (!sku) { res.status(404).json({ error: "SKU not found" }); return; }
-  res.json({ photoUrl: sku.photoUrl });
+  res.json(sku);
 });
 
 router.delete("/skus/:id/photo", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [sku] = await db.update(skusTable).set({ photoUrl: null }).where(eq(skusTable.id, id)).returning({ id: skusTable.id });
+  const [sku] = await db
+    .update(skusTable)
+    .set({ photoUrl: null, photoContentType: null })
+    .where(eq(skusTable.id, id))
+    .returning({ id: skusTable.id });
   if (!sku) { res.status(404).json({ error: "SKU not found" }); return; }
   res.json({ success: true });
 });
@@ -39,20 +52,31 @@ router.delete("/skus/:id/photo", requireAuth, async (req, res): Promise<void> =>
 router.patch("/ingredients/:id/photo", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { objectPath } = req.body;
+  const { objectPath, contentType } = req.body;
   if (!isValidObjectPath(objectPath)) {
     res.status(400).json({ error: "objectPath must start with /objects/" });
     return;
   }
-  const [ing] = await db.update(ingredientsTable).set({ photoUrl: objectPath }).where(eq(ingredientsTable.id, id)).returning({ photoUrl: ingredientsTable.photoUrl });
+  const resolvedType = (ALLOWED_PHOTO_TYPES as readonly string[]).includes(contentType)
+    ? contentType as string
+    : null;
+  const [ing] = await db
+    .update(ingredientsTable)
+    .set({ photoUrl: objectPath, photoContentType: resolvedType })
+    .where(eq(ingredientsTable.id, id))
+    .returning({ photoUrl: ingredientsTable.photoUrl, photoContentType: ingredientsTable.photoContentType });
   if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
-  res.json({ photoUrl: ing.photoUrl });
+  res.json(ing);
 });
 
 router.delete("/ingredients/:id/photo", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [ing] = await db.update(ingredientsTable).set({ photoUrl: null }).where(eq(ingredientsTable.id, id)).returning({ id: ingredientsTable.id });
+  const [ing] = await db
+    .update(ingredientsTable)
+    .set({ photoUrl: null, photoContentType: null })
+    .where(eq(ingredientsTable.id, id))
+    .returning({ id: ingredientsTable.id });
   if (!ing) { res.status(404).json({ error: "Ingredient not found" }); return; }
   res.json({ success: true });
 });

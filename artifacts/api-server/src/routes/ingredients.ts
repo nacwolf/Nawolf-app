@@ -539,7 +539,7 @@ router.get("/ingredients/:id/attachments", requireAuth, async (req, res): Promis
   res.json(attachments);
 });
 
-const ALLOWED_ATTACHMENT_MIME_TYPES = ["application/pdf", "image/jpeg"] as const;
+const ALLOWED_ATTACHMENT_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
 
 router.post("/ingredients/:id/attachments", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
@@ -584,6 +584,28 @@ router.post("/ingredients/:id/attachments", requireAuth, async (req, res): Promi
     .returning();
 
   res.status(201).json(attachment);
+});
+
+router.delete("/ingredients/:id/attachments/:attachmentId", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const attachmentId = parseInt(req.params.attachmentId, 10);
+  if (isNaN(id) || isNaN(attachmentId)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const [deleted] = await db
+    .delete(ingredientAttachmentsTable)
+    .where(eq(ingredientAttachmentsTable.id, attachmentId))
+    .returning({ id: ingredientAttachmentsTable.id, ingredientId: ingredientAttachmentsTable.ingredientId });
+  if (!deleted) {
+    res.status(404).json({ error: "Attachment not found" });
+    return;
+  }
+  if (deleted.ingredientId !== id) {
+    res.status(403).json({ error: "Attachment does not belong to this ingredient" });
+    return;
+  }
+  res.json({ success: true });
 });
 
 export default router;

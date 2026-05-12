@@ -529,6 +529,7 @@ export default function SkuDetail({ id }: { id: string }) {
             entityType="sku"
             entityId={skuId}
             currentPhotoUrl={(sku as any).photoUrl ?? null}
+            currentPhotoContentType={(sku as any).photoContentType ?? null}
             onUpdate={() => qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) })}
           />
         </div>

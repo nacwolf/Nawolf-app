@@ -14,6 +14,8 @@ import {
   getGetIngredientQueryKey,
   getGetIngredientPriceHistoryQueryKey,
   getListIngredientAttachmentsQueryKey,
+  type IngredientPrice,
+  type IngredientAttachment,
 } from "@workspace/api-client-react";
 import { SubCategoryCombobox } from "@/components/SubCategoryCombobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -246,10 +248,10 @@ export default function IngredientDetail({ id }: { id: string }) {
   function addFiles(files: FileList | null) {
     if (!files) return;
     const allowed = Array.from(files).filter(
-      f => f.type === "application/pdf" || f.type === "image/jpeg" || f.type === "image/jpg"
+      f => f.type === "application/pdf" || f.type === "image/jpeg" || f.type === "image/jpg" || f.type === "image/png"
     );
     if (allowed.length < files.length) {
-      toast({ variant: "destructive", title: "Only PDF and JPEG files are accepted" });
+      toast({ variant: "destructive", title: "Only PDF, JPEG, and PNG files are accepted" });
     }
     setPendingFiles(prev => [...prev, ...allowed.map(f => ({ file: f, id: crypto.randomUUID() }))]);
   }
@@ -327,7 +329,7 @@ export default function IngredientDetail({ id }: { id: string }) {
     );
   }
 
-  const chartData = history ? [...history].reverse().map(h => ({
+  const chartData = history ? [...history].reverse().map((h: IngredientPrice) => ({
     date: formatDate(h.effectiveDate),
     price: h.price,
   })) : [];
@@ -352,6 +354,7 @@ export default function IngredientDetail({ id }: { id: string }) {
             entityType="ingredient"
             entityId={ingredientId}
             currentPhotoUrl={(ingredient as any).photoUrl ?? null}
+            currentPhotoContentType={(ingredient as any).photoContentType ?? null}
             onUpdate={() => qc.invalidateQueries({ queryKey: getGetIngredientQueryKey(ingredientId) })}
           />
         </div>
@@ -640,7 +643,7 @@ export default function IngredientDetail({ id }: { id: string }) {
                 ) : history?.length === 0 ? (
                   <TableRow><TableCell colSpan={5} className="text-center py-4 text-muted-foreground text-sm">No history yet.</TableCell></TableRow>
                 ) : (
-                  history?.map(h => (
+                  history?.map((h: IngredientPrice) => (
                     editingPriceId === h.id ? (
                       <TableRow key={h.id} className="bg-muted/20">
                         <TableCell colSpan={5} className="py-3 px-4">
@@ -741,31 +744,62 @@ export default function IngredientDetail({ id }: { id: string }) {
 
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle className="text-base">Receipts & Quotations</CardTitle>
+          <CardTitle className="text-base">Files & Attachments</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {loadingAttachments ? (
             <Skeleton className="h-16 w-full" />
           ) : (attachments?.length ?? 0) > 0 ? (
             <div className="space-y-2">
-              {attachments?.map(att => (
-                <div key={att.id} className="flex items-center gap-3 bg-muted/30 rounded-lg px-3 py-2.5">
-                  <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{att.fileName}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(att.uploadedAt)}</p>
+              {attachments?.map((att: IngredientAttachment) => {
+                const isImg = att.fileType?.startsWith("image/");
+                const fileUrl = getApiUrl(`/storage${att.objectPath}`);
+                return (
+                  <div key={att.id} className="flex items-center gap-3 bg-muted/30 rounded-lg px-3 py-2.5 group">
+                    {isImg ? (
+                      <img
+                        src={fileUrl}
+                        alt={att.fileName}
+                        className="w-10 h-10 object-cover rounded border flex-shrink-0"
+                      />
+                    ) : (
+                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{att.fileName}</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(att.uploadedAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <a
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        {isImg ? "View" : "Download"}
+                      </a>
+                      <button
+                        type="button"
+                        title="Delete attachment"
+                        className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                        onClick={async () => {
+                          if (!confirm(`Delete "${att.fileName}"?`)) return;
+                          const r = await fetch(getApiUrl(`/ingredients/${ingredientId}/attachments/${att.id}`), { method: "DELETE" });
+                          if (r.ok) {
+                            qc.invalidateQueries({ queryKey: getListIngredientAttachmentsQueryKey(ingredientId) });
+                            toast({ title: "File deleted" });
+                          } else {
+                            toast({ variant: "destructive", title: "Failed to delete file" });
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <a
-                    href={getApiUrl(`/storage${att.objectPath}`)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download
-                  </a>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">No files attached yet.</p>
@@ -777,10 +811,11 @@ export default function IngredientDetail({ id }: { id: string }) {
             onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
           >
             <Upload className="w-5 h-5 text-muted-foreground mb-1" />
-            <p className="text-sm text-muted-foreground">Click or drag to add files (PDF, JPEG)</p>
+            <p className="text-sm text-muted-foreground">Click or drag to add files</p>
+            <p className="text-xs text-muted-foreground/70 mt-0.5">PDF · JPEG · PNG</p>
             <input
               type="file"
-              accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg"
+              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
               multiple
               className="hidden"
               onChange={e => addFiles(e.target.files)}
@@ -792,7 +827,15 @@ export default function IngredientDetail({ id }: { id: string }) {
               <div className="space-y-2">
                 {pendingFiles.map(pf => (
                   <div key={pf.id} className="flex items-center gap-2 bg-muted/20 rounded-lg px-3 py-2 border border-dashed">
-                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    {pf.file.type.startsWith("image/") ? (
+                      <img
+                        src={URL.createObjectURL(pf.file)}
+                        alt={pf.file.name}
+                        className="w-8 h-8 object-cover rounded border flex-shrink-0"
+                      />
+                    ) : (
+                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    )}
                     <span className="text-sm flex-1 truncate">{pf.file.name}</span>
                     <span className="text-xs text-muted-foreground flex-shrink-0">{(pf.file.size / 1024).toFixed(0)} KB</span>
                     <button type="button" onClick={() => removeFile(pf.id)} className="text-muted-foreground hover:text-destructive">

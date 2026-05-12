@@ -8,29 +8,31 @@ interface Props {
   entityType: "sku" | "ingredient";
   entityId: number;
   currentPhotoUrl: string | null | undefined;
-  onUpdate: (objectPath: string | null) => void;
+  currentPhotoContentType?: string | null;
+  onUpdate: () => void;
 }
 
 const ACCEPTED = ".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf";
 
-export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }: Props) {
+export function PhotoUpload({ entityType, entityId, currentPhotoUrl, currentPhotoContentType, onUpdate }: Props) {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [imgError, setImgError] = useState(false);
+  // fallback for old uploads where contentType wasn't stored
+  const [imgLoadFailed, setImgLoadFailed] = useState(false);
 
   const servingUrl = currentPhotoUrl ? getApiUrl(`/storage${currentPhotoUrl}`) : null;
-  const isPdf = currentPhotoUrl?.toLowerCase().includes("pdf") || imgError;
+  const isImage = currentPhotoContentType
+    ? currentPhotoContentType.startsWith("image/")
+    : !imgLoadFailed;
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    // reset so the same file can be re-selected after a remove
     e.target.value = "";
 
     setUploading(true);
     try {
-      // Step 1: get a presigned upload URL from the backend
       const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -39,7 +41,6 @@ export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }:
       if (!urlRes.ok) throw new Error("Failed to get upload URL");
       const { uploadURL, objectPath } = await urlRes.json();
 
-      // Step 2: PUT the file directly to object storage
       const putRes = await fetch(uploadURL, {
         method: "PUT",
         body: file,
@@ -47,16 +48,15 @@ export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }:
       });
       if (!putRes.ok) throw new Error("Upload to storage failed");
 
-      // Step 3: save the objectPath on the entity
       const patchRes = await fetch(getApiUrl(`/${entityType}s/${entityId}/photo`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ objectPath }),
+        body: JSON.stringify({ objectPath, contentType: file.type }),
       });
       if (!patchRes.ok) throw new Error("Failed to save photo reference");
 
-      setImgError(false);
-      onUpdate(objectPath);
+      setImgLoadFailed(false);
+      onUpdate();
       toast({ title: "Photo uploaded" });
     } catch (err) {
       toast({ variant: "destructive", title: err instanceof Error ? err.message : "Upload failed" });
@@ -69,8 +69,8 @@ export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }:
     try {
       const res = await fetch(getApiUrl(`/${entityType}s/${entityId}/photo`), { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to remove photo");
-      onUpdate(null);
-      setImgError(false);
+      setImgLoadFailed(false);
+      onUpdate();
       toast({ title: "Photo removed" });
     } catch {
       toast({ variant: "destructive", title: "Failed to remove photo" });
@@ -81,22 +81,22 @@ export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }:
     <div className="space-y-2">
       {servingUrl ? (
         <div className="relative group w-full">
-          {!isPdf ? (
+          {isImage ? (
             <img
               src={servingUrl}
               alt="Photo"
-              className="w-full h-48 object-cover rounded-lg border bg-muted"
-              onError={() => setImgError(true)}
+              className="w-full h-44 object-cover rounded-lg border bg-muted"
+              onError={() => setImgLoadFailed(true)}
             />
           ) : (
             <a
               href={servingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 w-full h-48 border rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors px-6"
+              className="flex flex-col items-center justify-center w-full h-44 border-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors gap-2"
             >
-              <FileText className="w-8 h-8 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm text-muted-foreground">View attached file</span>
+              <FileText className="w-8 h-8 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">View file</span>
             </a>
           )}
           <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -126,7 +126,7 @@ export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }:
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/30 rounded-lg hover:border-primary/50 hover:bg-muted/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-muted-foreground/25 rounded-lg hover:border-primary/50 hover:bg-muted/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? (
             <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
@@ -134,18 +134,12 @@ export function PhotoUpload({ entityType, entityId, currentPhotoUrl, onUpdate }:
             <>
               <ImagePlus className="w-5 h-5 text-muted-foreground mb-1" />
               <span className="text-sm text-muted-foreground">Add photo</span>
-              <span className="text-xs text-muted-foreground/70 mt-0.5">JPG, PNG, or PDF</span>
+              <span className="text-xs text-muted-foreground/60 mt-0.5">JPG · PNG · PDF</span>
             </>
           )}
         </button>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPTED}
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={inputRef} type="file" accept={ACCEPTED} className="hidden" onChange={handleFileChange} />
     </div>
   );
 }

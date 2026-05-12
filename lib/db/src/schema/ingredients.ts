@@ -17,6 +17,7 @@ export const ingredientsTable = pgTable("ingredients", {
   notes: text("notes"),
   createdBy: text("created_by"),
   photoUrl: text("photo_url"),
+  photoContentType: text("photo_content_type"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
