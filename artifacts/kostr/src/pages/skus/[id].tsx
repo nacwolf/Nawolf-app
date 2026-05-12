@@ -567,7 +567,7 @@ export default function SkuDetail({ id }: { id: string }) {
                     <form onSubmit={priceForm.handleSubmit(onEditPriceSubmit)} className="space-y-4">
                       <FormField control={priceForm.control} name="sellPrice" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>New Sell Price (€)</FormLabel>
+                          <FormLabel>New Sell Price (฿)</FormLabel>
                           <FormControl><Input type="number" step="0.01" autoFocus {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
@@ -595,7 +595,7 @@ export default function SkuDetail({ id }: { id: string }) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Margin €/unit</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Margin ฿/unit</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(marginEuro > 0 ? marginEuro : null)}</div>
@@ -674,7 +674,7 @@ export default function SkuDetail({ id }: { id: string }) {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis tickFormatter={(v) => `€${v.toFixed(2)}`} fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={(v) => `฿${v.toFixed(2)}`} fontSize={11} tickLine={false} axisLine={false} />
                     <RechartsTooltip formatter={(v: number) => [formatCurrency(v)]} />
                     <Area type="monotone" dataKey="sellPrice" name="Sell Price" stroke="hsl(var(--primary))" fill="url(#gradMarginBand)" strokeWidth={2} />
                     <Area type="monotone" dataKey="cogs" name="COGS" stroke="#ef4444" fill="url(#gradCogs)" strokeWidth={2} />
@@ -1051,7 +1051,7 @@ export default function SkuDetail({ id }: { id: string }) {
                       const selected = teamMembers?.filter(m => prodMemberIds.includes(m.id)) ?? [];
                       const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
                       const totalUnits = (parseInt(prodUnitsPerDay) || 0) * (parseInt(prodCartonSize) || 1);
-                      return `${selected.map(m => m.name).join(", ")} · €${totalRate.toFixed(2)}/hr × ${parseFloat(prodShiftHours) || 8} hrs ÷ ${totalUnits} units`;
+                      return `${selected.map(m => m.name).join(", ")} · ฿${totalRate.toFixed(2)}/hr × ${parseFloat(prodShiftHours) || 8} hrs ÷ ${totalUnits} units`;
                     })()}
                   </div>
                 )}

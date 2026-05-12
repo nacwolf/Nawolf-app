@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Plus, Trash2, ChevronDown, ChevronUp, Printer } from "lucide-react";
+import { Loader2, Plus, Trash2, ChevronDown, ChevronUp, Printer, ImagePlus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
+import { getApiUrl } from "@/lib/queryClient";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Raw Materials": "bg-green-100 text-green-800",
@@ -55,6 +56,27 @@ export default function SkuNew() {
   const [blockSupplierId, setBlockSupplierId] = useState<string>("");
   const [blockNumBlocks, setBlockNumBlocks] = useState<string>("");
   const [blockMoq, setBlockMoq] = useState<string>("");
+
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPendingPhoto(file);
+    if (file.type.startsWith("image/")) {
+      setPhotoPreview(URL.createObjectURL(file));
+    } else {
+      setPhotoPreview(null);
+    }
+  }
+
+  function clearPhoto() {
+    setPendingPhoto(null);
+    setPhotoPreview(null);
+  }
 
   const form = useForm<SkuFormValues>({
     resolver: zodResolver(skuFormSchema),
@@ -145,6 +167,28 @@ export default function SkuNew() {
           toast({ variant: "destructive", title: "SKU created but block config failed", description: "You can set it on the SKU detail page." });
         }
       }
+      if (pendingPhoto) {
+        try {
+          const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: pendingPhoto.name, size: pendingPhoto.size, contentType: pendingPhoto.type || "application/octet-stream" }),
+          });
+          if (urlRes.ok) {
+            const { uploadURL, objectPath } = await urlRes.json();
+            const putRes = await fetch(uploadURL, { method: "PUT", body: pendingPhoto, headers: { "Content-Type": pendingPhoto.type || "application/octet-stream" } });
+            if (putRes.ok) {
+              await fetch(getApiUrl(`/skus/${res.id}/photo`), {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ objectPath, contentType: pendingPhoto.type }),
+              });
+            }
+          }
+        } catch {
+          // photo upload failure is non-fatal — SKU was created, photo can be added from detail page
+        }
+      }
       toast({ title: "SKU Created", description: `${res.skuCode} was created successfully.` });
       setLocation(`/skus/${res.id}`);
     } catch {
@@ -201,7 +245,7 @@ export default function SkuNew() {
                   )} />
                   <FormField control={form.control} name="sellPrice" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Sell Price (€)</FormLabel>
+                      <FormLabel>Sell Price (฿)</FormLabel>
                       <FormControl><Input type="number" step="0.01" min="0" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
@@ -218,6 +262,36 @@ export default function SkuNew() {
                       <FormControl><Textarea placeholder="Any additional notes..." {...field} value={field.value || ""} /></FormControl>
                     </FormItem>
                   )} />
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-sm font-medium leading-none">Product Photo (Optional)</label>
+                    {pendingPhoto ? (
+                      <div className="relative group w-full">
+                        {photoPreview ? (
+                          <img src={photoPreview} alt="Preview" className="w-full h-40 object-cover rounded-lg border bg-muted" />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center w-full h-40 border-2 rounded-lg bg-muted/30 gap-2">
+                            <ImagePlus className="w-6 h-6 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">{pendingPhoto.name}</span>
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button type="button" size="sm" variant="secondary" className="h-7 px-2 text-xs shadow" onClick={() => photoInputRef.current?.click()}>Replace</Button>
+                          <Button type="button" size="sm" variant="secondary" className="h-7 w-7 p-0 shadow" onClick={clearPhoto} title="Remove photo"><X className="w-3 h-3" /></Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => photoInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-muted-foreground/25 rounded-lg hover:border-primary/50 hover:bg-muted/20 transition-colors"
+                      >
+                        <ImagePlus className="w-5 h-5 text-muted-foreground mb-1" />
+                        <span className="text-sm text-muted-foreground">Add photo</span>
+                        <span className="text-xs text-muted-foreground/60 mt-0.5">JPG · PNG · PDF</span>
+                      </button>
+                    )}
+                    <input ref={photoInputRef} type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" className="hidden" onChange={handlePhotoSelect} />
+                  </div>
                 </CardContent>
               </Card>
 
@@ -414,7 +488,7 @@ export default function SkuNew() {
                         <span>{formatCurrency(totalCogsWithBlocks)}</span>
                       </div>
                       <div className="border-t pt-2 flex justify-between">
-                        <span className="text-sm text-muted-foreground">Margin €/unit</span>
+                        <span className="text-sm text-muted-foreground">Margin ฿/unit</span>
                         <span className="font-semibold">{formatCurrency(watchSellPrice - totalCogsWithBlocks)}</span>
                       </div>
                     </div>
