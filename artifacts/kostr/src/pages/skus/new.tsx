@@ -413,7 +413,7 @@ export default function SkuNew() {
                       )} />
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <FormItem><FormLabel>Net Weight</FormLabel>
+                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Net Weight</label>
                         <div className="flex gap-2">
                           <FormField control={form.control} name="netWeight" render={({ field }) => (
                             <FormControl><Input type="number" step="0.01" min="0" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
@@ -422,8 +422,8 @@ export default function SkuNew() {
                             <UnitSelect value={field.value || "g"} onChange={field.onChange} options={["g", "kg", "ml", "l"]} />
                           )} />
                         </div>
-                      </FormItem>
-                      <FormItem><FormLabel>Gross Weight</FormLabel>
+                      </div>
+                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Gross Weight</label>
                         <div className="flex gap-2">
                           <FormField control={form.control} name="grossWeight" render={({ field }) => (
                             <FormControl><Input type="number" step="0.01" min="0" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
@@ -432,8 +432,8 @@ export default function SkuNew() {
                             <UnitSelect value={field.value || "g"} onChange={field.onChange} options={["g", "kg", "ml", "l"]} />
                           )} />
                         </div>
-                      </FormItem>
-                      <FormItem><FormLabel>Carton Gross Weight</FormLabel>
+                      </div>
+                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Carton Gross Weight</label>
                         <div className="flex gap-2">
                           <FormField control={form.control} name="cartonGrossWeight" render={({ field }) => (
                             <FormControl><Input type="number" step="0.01" min="0" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
@@ -442,8 +442,8 @@ export default function SkuNew() {
                             <UnitSelect value={field.value || "kg"} onChange={field.onChange} options={["g", "kg"]} />
                           )} />
                         </div>
-                      </FormItem>
-                      <FormItem><FormLabel>Shelf Life</FormLabel>
+                      </div>
+                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Shelf Life</label>
                         <div className="flex gap-2">
                           <FormField control={form.control} name="shelfLife" render={({ field }) => (
                             <FormControl><Input type="number" step="1" min="1" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
@@ -452,9 +452,9 @@ export default function SkuNew() {
                             <UnitSelect value={field.value || "days"} onChange={field.onChange} options={["days", "months", "years"]} />
                           )} />
                         </div>
-                      </FormItem>
+                      </div>
                     </div>
-                    <FormItem><FormLabel>Carton Dimensions (L × W × H in cm)</FormLabel>
+                    <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Carton Dimensions (L × W × H in cm)</label>
                       <div className="flex items-center gap-2">
                         <FormField control={form.control} name="cartonDimL" render={({ field }) => (
                           <FormControl><Input type="number" step="0.1" min="0" placeholder="L" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
@@ -469,7 +469,7 @@ export default function SkuNew() {
                         )} />
                         <span className="text-muted-foreground text-xs flex-shrink-0">cm</span>
                       </div>
-                    </FormItem>
+                    </div>
                     <FormField control={form.control} name="storageCondition" render={({ field }) => (
                       <FormItem><FormLabel>Storage Condition</FormLabel>
                         <FormControl><Input placeholder="e.g. Store in cool dry place" {...field} value={field.value || ""} /></FormControl></FormItem>
@@ -495,7 +495,7 @@ export default function SkuNew() {
                       <FormItem><FormLabel>FOB Price (฿)</FormLabel>
                         <FormControl><Input type="number" step="0.01" min="0" placeholder="Free On Board price" {...field} value={field.value ?? ""} /></FormControl></FormItem>
                     )} />
-                    <FormItem><FormLabel>MOQ</FormLabel>
+                    <div className="space-y-1.5"><label className="text-sm font-medium leading-none">MOQ</label>
                       <div className="flex gap-2">
                         <FormField control={form.control} name="moq" render={({ field }) => (
                           <FormControl><Input type="number" step="1" min="1" placeholder="Minimum order quantity" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
@@ -504,7 +504,7 @@ export default function SkuNew() {
                           <UnitSelect value={field.value || "units"} onChange={field.onChange} options={["units", "cartons", "kg"]} />
                         )} />
                       </div>
-                    </FormItem>
+                    </div>
                   </CardContent>
                 )}
               </Card>
