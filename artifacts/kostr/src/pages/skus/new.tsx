@@ -413,63 +413,62 @@ export default function SkuNew() {
                       )} />
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Net Weight</label>
-                        <div className="flex gap-2">
-                          <FormField control={form.control} name="netWeight" render={({ field }) => (
+                      <FormField control={form.control} name="netWeight" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Net Weight</FormLabel>
+                          <div className="flex gap-2">
                             <FormControl><Input type="number" step="0.01" min="0" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                          )} />
-                          <FormField control={form.control} name="netWeightUnit" render={({ field }) => (
-                            <UnitSelect value={field.value || "g"} onChange={field.onChange} options={["g", "kg", "ml", "l"]} />
-                          )} />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Gross Weight</label>
-                        <div className="flex gap-2">
-                          <FormField control={form.control} name="grossWeight" render={({ field }) => (
+                            <UnitSelect value={form.watch("netWeightUnit") || "g"} onChange={v => form.setValue("netWeightUnit", v)} options={["g", "kg", "ml", "l"]} />
+                          </div>
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="grossWeight" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Gross Weight</FormLabel>
+                          <div className="flex gap-2">
                             <FormControl><Input type="number" step="0.01" min="0" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                          )} />
-                          <FormField control={form.control} name="grossWeightUnit" render={({ field }) => (
-                            <UnitSelect value={field.value || "g"} onChange={field.onChange} options={["g", "kg", "ml", "l"]} />
-                          )} />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Carton Gross Weight</label>
-                        <div className="flex gap-2">
-                          <FormField control={form.control} name="cartonGrossWeight" render={({ field }) => (
+                            <UnitSelect value={form.watch("grossWeightUnit") || "g"} onChange={v => form.setValue("grossWeightUnit", v)} options={["g", "kg", "ml", "l"]} />
+                          </div>
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="cartonGrossWeight" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Carton Gross Weight</FormLabel>
+                          <div className="flex gap-2">
                             <FormControl><Input type="number" step="0.01" min="0" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                          )} />
-                          <FormField control={form.control} name="cartonGrossWeightUnit" render={({ field }) => (
-                            <UnitSelect value={field.value || "kg"} onChange={field.onChange} options={["g", "kg"]} />
-                          )} />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Shelf Life</label>
-                        <div className="flex gap-2">
-                          <FormField control={form.control} name="shelfLife" render={({ field }) => (
+                            <UnitSelect value={form.watch("cartonGrossWeightUnit") || "kg"} onChange={v => form.setValue("cartonGrossWeightUnit", v)} options={["g", "kg"]} />
+                          </div>
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="shelfLife" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Shelf Life</FormLabel>
+                          <div className="flex gap-2">
                             <FormControl><Input type="number" step="1" min="1" placeholder="0" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                          )} />
-                          <FormField control={form.control} name="shelfLifeUnit" render={({ field }) => (
-                            <UnitSelect value={field.value || "days"} onChange={field.onChange} options={["days", "months", "years"]} />
-                          )} />
-                        </div>
-                      </div>
+                            <UnitSelect value={form.watch("shelfLifeUnit") || "days"} onChange={v => form.setValue("shelfLifeUnit", v)} options={["days", "months", "years"]} />
+                          </div>
+                        </FormItem>
+                      )} />
                     </div>
-                    <div className="space-y-1.5"><label className="text-sm font-medium leading-none">Carton Dimensions (L × W × H in cm)</label>
-                      <div className="flex items-center gap-2">
-                        <FormField control={form.control} name="cartonDimL" render={({ field }) => (
+                    <FormField control={form.control} name="cartonDimL" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Carton Dimensions (L × W × H in cm)</FormLabel>
+                        <div className="flex items-center gap-2">
                           <FormControl><Input type="number" step="0.1" min="0" placeholder="L" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                        )} />
-                        <span className="text-muted-foreground text-sm flex-shrink-0">×</span>
-                        <FormField control={form.control} name="cartonDimW" render={({ field }) => (
-                          <FormControl><Input type="number" step="0.1" min="0" placeholder="W" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                        )} />
-                        <span className="text-muted-foreground text-sm flex-shrink-0">×</span>
-                        <FormField control={form.control} name="cartonDimH" render={({ field }) => (
-                          <FormControl><Input type="number" step="0.1" min="0" placeholder="H" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                        )} />
-                        <span className="text-muted-foreground text-xs flex-shrink-0">cm</span>
-                      </div>
-                    </div>
+                          <span className="text-muted-foreground text-sm flex-shrink-0">×</span>
+                          <Input type="number" step="0.1" min="0" placeholder="W" className="flex-1"
+                            value={form.watch("cartonDimW") ?? ""}
+                            onChange={e => form.setValue("cartonDimW", e.target.value === "" ? undefined : Number(e.target.value))}
+                          />
+                          <span className="text-muted-foreground text-sm flex-shrink-0">×</span>
+                          <Input type="number" step="0.1" min="0" placeholder="H" className="flex-1"
+                            value={form.watch("cartonDimH") ?? ""}
+                            onChange={e => form.setValue("cartonDimH", e.target.value === "" ? undefined : Number(e.target.value))}
+                          />
+                          <span className="text-muted-foreground text-xs flex-shrink-0">cm</span>
+                        </div>
+                      </FormItem>
+                    )} />
                     <FormField control={form.control} name="storageCondition" render={({ field }) => (
                       <FormItem><FormLabel>Storage Condition</FormLabel>
                         <FormControl><Input placeholder="e.g. Store in cool dry place" {...field} value={field.value || ""} /></FormControl></FormItem>
@@ -495,16 +494,15 @@ export default function SkuNew() {
                       <FormItem><FormLabel>FOB Price (฿)</FormLabel>
                         <FormControl><Input type="number" step="0.01" min="0" placeholder="Free On Board price" {...field} value={field.value ?? ""} /></FormControl></FormItem>
                     )} />
-                    <div className="space-y-1.5"><label className="text-sm font-medium leading-none">MOQ</label>
-                      <div className="flex gap-2">
-                        <FormField control={form.control} name="moq" render={({ field }) => (
+                    <FormField control={form.control} name="moq" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>MOQ</FormLabel>
+                        <div className="flex gap-2">
                           <FormControl><Input type="number" step="1" min="1" placeholder="Minimum order quantity" className="flex-1" {...field} value={field.value ?? ""} /></FormControl>
-                        )} />
-                        <FormField control={form.control} name="moqUnit" render={({ field }) => (
-                          <UnitSelect value={field.value || "units"} onChange={field.onChange} options={["units", "cartons", "kg"]} />
-                        )} />
-                      </div>
-                    </div>
+                          <UnitSelect value={form.watch("moqUnit") || "units"} onChange={v => form.setValue("moqUnit", v)} options={["units", "cartons", "kg"]} />
+                        </div>
+                      </FormItem>
+                    )} />
                   </CardContent>
                 )}
               </Card>
