@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getAuth } from "@clerk/express";
-import { db, ingredientAttachmentsTable, skusTable, ingredientsTable } from "@workspace/db";
+import { db, ingredientAttachmentsTable, skusTable, ingredientsTable, skuProductPhotosTable, skuCertificateFilesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -84,7 +84,7 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
 
     // Authorization: objectPath must be registered in one of the known storage tables.
     // Any authenticated user can access stored objects (internal multi-user tool).
-    const [attachment, skuPhoto, ingPhoto] = await Promise.all([
+    const [attachment, skuPhoto, ingPhoto, skuFile, skuProdPhoto, skuCertFile] = await Promise.all([
       db.select({ id: ingredientAttachmentsTable.id })
         .from(ingredientAttachmentsTable)
         .where(eq(ingredientAttachmentsTable.objectPath, objectPath))
@@ -97,9 +97,26 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
         .from(ingredientsTable)
         .where(eq(ingredientsTable.photoUrl, objectPath))
         .limit(1),
+      // SKU single-file uploads (label, spec sheet, dieline) — checked via separate queries below
+      Promise.resolve([] as { id: number }[]),
+      db.select({ id: skuProductPhotosTable.id })
+        .from(skuProductPhotosTable)
+        .where(eq(skuProductPhotosTable.objectPath, objectPath))
+        .limit(1),
+      db.select({ id: skuCertificateFilesTable.id })
+        .from(skuCertificateFilesTable)
+        .where(eq(skuCertificateFilesTable.objectPath, objectPath))
+        .limit(1),
     ]);
 
-    if (!attachment[0] && !skuPhoto[0] && !ingPhoto[0]) {
+    // Also check SKU single-file columns (label, spec sheet, dieline)
+    const [skuLabelFile, skuSpecFile, skuDielineFile] = await Promise.all([
+      db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.labelFileUrl, objectPath)).limit(1),
+      db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.specSheetUrl, objectPath)).limit(1),
+      db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.dielineUrl, objectPath)).limit(1),
+    ]);
+
+    if (!attachment[0] && !skuPhoto[0] && !ingPhoto[0] && !skuLabelFile[0] && !skuSpecFile[0] && !skuDielineFile[0] && !skuProdPhoto[0] && !skuCertFile[0]) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, max, sql } from "drizzle-orm";
-import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable } from "@workspace/db";
+import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable, skuProductPhotosTable, skuCertificateFilesTable } from "@workspace/db";
 import {
   CreateSkuBody,
   GetSkuParams,
@@ -65,7 +65,18 @@ router.post("/skus", requireAuth, async (req, res): Promise<void> => {
 
   const [sku] = await db
     .insert(skusTable)
-    .values({ ...skuData, sellPrice: skuData.sellPrice.toFixed(4) })
+    .values({
+      ...skuData,
+      sellPrice: skuData.sellPrice.toFixed(4),
+      netWeight: skuData.netWeight != null ? String(skuData.netWeight) : null,
+      grossWeight: skuData.grossWeight != null ? String(skuData.grossWeight) : null,
+      cartonGrossWeight: skuData.cartonGrossWeight != null ? String(skuData.cartonGrossWeight) : null,
+      cartonDimL: skuData.cartonDimL != null ? String(skuData.cartonDimL) : null,
+      cartonDimW: skuData.cartonDimW != null ? String(skuData.cartonDimW) : null,
+      cartonDimH: skuData.cartonDimH != null ? String(skuData.cartonDimH) : null,
+      exFactoryPrice: skuData.exFactoryPrice != null ? String(skuData.exFactoryPrice) : null,
+      fobPrice: skuData.fobPrice != null ? String(skuData.fobPrice) : null,
+    })
     .returning();
 
   if (costLines && costLines.length > 0) {
@@ -141,9 +152,22 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
     .where(eq(skuSnapshotsTable.skuId, sku.id))
     .orderBy(desc(skuSnapshotsTable.snapshotDate), desc(skuSnapshotsTable.createdAt));
 
+  const [productPhotos, certificateFiles] = await Promise.all([
+    db.select().from(skuProductPhotosTable).where(eq(skuProductPhotosTable.skuId, sku.id)).orderBy(skuProductPhotosTable.sortOrder),
+    db.select().from(skuCertificateFilesTable).where(eq(skuCertificateFilesTable.skuId, sku.id)).orderBy(skuCertificateFilesTable.uploadedAt),
+  ]);
+
   res.json({
     ...sku,
     sellPrice: parseFloat(sku.sellPrice),
+    netWeight: sku.netWeight != null ? parseFloat(sku.netWeight) : null,
+    grossWeight: sku.grossWeight != null ? parseFloat(sku.grossWeight) : null,
+    cartonGrossWeight: sku.cartonGrossWeight != null ? parseFloat(sku.cartonGrossWeight) : null,
+    cartonDimL: sku.cartonDimL != null ? parseFloat(sku.cartonDimL) : null,
+    cartonDimW: sku.cartonDimW != null ? parseFloat(sku.cartonDimW) : null,
+    cartonDimH: sku.cartonDimH != null ? parseFloat(sku.cartonDimH) : null,
+    exFactoryPrice: sku.exFactoryPrice != null ? parseFloat(sku.exFactoryPrice) : null,
+    fobPrice: sku.fobPrice != null ? parseFloat(sku.fobPrice) : null,
     totalCogs,
     grossMargin,
     status,
@@ -154,6 +178,8 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
       sellPrice: parseFloat(s.sellPrice),
       grossMargin: parseFloat(s.grossMargin),
     })),
+    productPhotos,
+    certificateFiles,
   });
 });
 
@@ -170,12 +196,45 @@ router.patch("/skus/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const d = parsed.data;
   const updateData: Record<string, any> = {};
-  if (parsed.data.name != null) updateData.name = parsed.data.name;
-  if (parsed.data.category != null) updateData.category = parsed.data.category;
-  if (parsed.data.unitSize != null) updateData.unitSize = parsed.data.unitSize;
-  if (parsed.data.sellPrice != null) updateData.sellPrice = parsed.data.sellPrice.toFixed(4);
-  if (parsed.data.customerName !== undefined) updateData.customerName = parsed.data.customerName;
+  const setIfPresent = (key: string, val: any) => { if (val !== undefined) updateData[key] = val; };
+  setIfPresent("name", d.name);
+  setIfPresent("nameThai", d.nameThai);
+  setIfPresent("brandName", d.brandName);
+  setIfPresent("category", d.category);
+  setIfPresent("unitSize", d.unitSize);
+  if (d.sellPrice != null) updateData.sellPrice = d.sellPrice.toFixed(4);
+  setIfPresent("customerName", d.customerName);
+  setIfPresent("notes", d.notes);
+  setIfPresent("netWeight", d.netWeight != null ? String(d.netWeight) : d.netWeight);
+  setIfPresent("netWeightUnit", d.netWeightUnit);
+  setIfPresent("grossWeight", d.grossWeight != null ? String(d.grossWeight) : d.grossWeight);
+  setIfPresent("grossWeightUnit", d.grossWeightUnit);
+  setIfPresent("unitsPerCarton", d.unitsPerCarton);
+  setIfPresent("cartonGrossWeight", d.cartonGrossWeight != null ? String(d.cartonGrossWeight) : d.cartonGrossWeight);
+  setIfPresent("cartonGrossWeightUnit", d.cartonGrossWeightUnit);
+  setIfPresent("cartonDimL", d.cartonDimL != null ? String(d.cartonDimL) : d.cartonDimL);
+  setIfPresent("cartonDimW", d.cartonDimW != null ? String(d.cartonDimW) : d.cartonDimW);
+  setIfPresent("cartonDimH", d.cartonDimH != null ? String(d.cartonDimH) : d.cartonDimH);
+  setIfPresent("shelfLife", d.shelfLife);
+  setIfPresent("shelfLifeUnit", d.shelfLifeUnit);
+  setIfPresent("storageCondition", d.storageCondition);
+  setIfPresent("exFactoryPrice", d.exFactoryPrice != null ? String(d.exFactoryPrice) : d.exFactoryPrice);
+  setIfPresent("fobPrice", d.fobPrice != null ? String(d.fobPrice) : d.fobPrice);
+  setIfPresent("moq", d.moq);
+  setIfPresent("moqUnit", d.moqUnit);
+  setIfPresent("fdaNumber", d.fdaNumber);
+  setIfPresent("barcodeEan13", d.barcodeEan13);
+  setIfPresent("halalCertified", d.halalCertified);
+  setIfPresent("gmpCertified", d.gmpCertified);
+  setIfPresent("haccpCertified", d.haccpCertified);
+  setIfPresent("organicCertified", d.organicCertified);
+  setIfPresent("otherCertifications", d.otherCertifications);
+  setIfPresent("ingredientsListThai", d.ingredientsListThai);
+  setIfPresent("ingredientsListEnglish", d.ingredientsListEnglish);
+  setIfPresent("allergenInfo", d.allergenInfo);
+  setIfPresent("nutritionalInfo", d.nutritionalInfo);
 
   if (Object.keys(updateData).length === 0) {
     res.status(400).json({ error: "No fields to update" });

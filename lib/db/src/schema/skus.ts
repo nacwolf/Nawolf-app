@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, numeric, integer, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, integer, date, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ingredientsTable } from "./ingredients";
@@ -29,14 +29,88 @@ export const skuPrintingBlockConfigsTable = pgTable("sku_printing_block_configs"
 export const skusTable = pgTable("skus", {
   id: serial("id").primaryKey(),
   skuCode: text("sku_code").notNull().unique(),
-  name: text("name").notNull(),
-  category: text("category").notNull(),
-  unitSize: text("unit_size").notNull(),
-  sellPrice: numeric("sell_price", { precision: 12, scale: 4 }).notNull(),
+
+  // Section I — Basic Identity
+  name: text("name"),
+  nameThai: text("name_thai").notNull(),
+  brandName: text("brand_name"),
+  category: text("category"),
   customerName: text("customer_name"),
+  notes: text("notes"),
+
+  // Section II — Physical Specifications
+  unitSize: text("unit_size"),
+  netWeight: numeric("net_weight", { precision: 10, scale: 4 }),
+  netWeightUnit: text("net_weight_unit"),
+  grossWeight: numeric("gross_weight", { precision: 10, scale: 4 }),
+  grossWeightUnit: text("gross_weight_unit"),
+  unitsPerCarton: integer("units_per_carton"),
+  cartonGrossWeight: numeric("carton_gross_weight", { precision: 10, scale: 4 }),
+  cartonGrossWeightUnit: text("carton_gross_weight_unit"),
+  cartonDimL: numeric("carton_dim_l", { precision: 10, scale: 2 }),
+  cartonDimW: numeric("carton_dim_w", { precision: 10, scale: 2 }),
+  cartonDimH: numeric("carton_dim_h", { precision: 10, scale: 2 }),
+  shelfLife: integer("shelf_life"),
+  shelfLifeUnit: text("shelf_life_unit"),
+  storageCondition: text("storage_condition"),
+
+  // Section III — Pricing & Commercial
+  sellPrice: numeric("sell_price", { precision: 12, scale: 4 }).notNull(),
+  exFactoryPrice: numeric("ex_factory_price", { precision: 12, scale: 4 }),
+  fobPrice: numeric("fob_price", { precision: 12, scale: 4 }),
+  moq: integer("moq"),
+  moqUnit: text("moq_unit"),
+
+  // Section IV — Regulatory & Compliance
+  fdaNumber: text("fda_number"),
+  barcodeEan13: text("barcode_ean13"),
+  halalCertified: boolean("halal_certified").default(false),
+  gmpCertified: boolean("gmp_certified").default(false),
+  haccpCertified: boolean("haccp_certified").default(false),
+  organicCertified: boolean("organic_certified").default(false),
+  otherCertifications: text("other_certifications"),
+
+  // Section V — Labelling & Files (text fields)
+  ingredientsListThai: text("ingredients_list_thai"),
+  ingredientsListEnglish: text("ingredients_list_english"),
+  allergenInfo: text("allergen_info"),
+  nutritionalInfo: text("nutritional_info"),
+
+  // Section V — Single file uploads
   photoUrl: text("photo_url"),
   photoContentType: text("photo_content_type"),
+  labelFileUrl: text("label_file_url"),
+  labelFileContentType: text("label_file_content_type"),
+  labelFileName: text("label_file_name"),
+  specSheetUrl: text("spec_sheet_url"),
+  specSheetContentType: text("spec_sheet_content_type"),
+  specSheetFileName: text("spec_sheet_name"),
+  dielineUrl: text("dieline_url"),
+  dielineContentType: text("dieline_content_type"),
+  dielineFileName: text("dieline_name"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const skuProductPhotosTable = pgTable("sku_product_photos", {
+  id: serial("id").primaryKey(),
+  skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
+  objectPath: text("object_path").notNull(),
+  contentType: text("content_type"),
+  fileName: text("file_name"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  uploadedBy: text("uploaded_by"),
+});
+
+export const skuCertificateFilesTable = pgTable("sku_certificate_files", {
+  id: serial("id").primaryKey(),
+  skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
+  objectPath: text("object_path").notNull(),
+  contentType: text("content_type"),
+  fileName: text("file_name"),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  uploadedBy: text("uploaded_by"),
 });
 
 export const costLinesTable = pgTable("cost_lines", {

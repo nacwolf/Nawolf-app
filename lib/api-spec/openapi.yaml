@@ -1210,6 +1210,42 @@ components:
         - costLines
         - snapshots
 
+    SkuProductPhoto:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuId:
+          type: integer
+        objectPath:
+          type: string
+        contentType:
+          type: ["string", "null"]
+        fileName:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        uploadedAt:
+          type: string
+      required: [id, skuId, objectPath, sortOrder, uploadedAt]
+
+    SkuCertificateFile:
+      type: object
+      properties:
+        id:
+          type: integer
+        skuId:
+          type: integer
+        objectPath:
+          type: string
+        contentType:
+          type: ["string", "null"]
+        fileName:
+          type: ["string", "null"]
+        uploadedAt:
+          type: string
+      required: [id, skuId, objectPath, uploadedAt]
+
     CreateSkuBody:
       type: object
       properties:
@@ -1217,13 +1253,75 @@ components:
           type: string
         name:
           type: string
+        nameThai:
+          type: ["string", "null"]
+        brandName:
+          type: ["string", "null"]
         category:
-          type: string
+          type: ["string", "null"]
         unitSize:
-          type: string
+          type: ["string", "null"]
         sellPrice:
           type: number
         customerName:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        netWeight:
+          type: ["number", "null"]
+        netWeightUnit:
+          type: ["string", "null"]
+        grossWeight:
+          type: ["number", "null"]
+        grossWeightUnit:
+          type: ["string", "null"]
+        unitsPerCarton:
+          type: ["integer", "null"]
+        cartonGrossWeight:
+          type: ["number", "null"]
+        cartonGrossWeightUnit:
+          type: ["string", "null"]
+        cartonDimL:
+          type: ["number", "null"]
+        cartonDimW:
+          type: ["number", "null"]
+        cartonDimH:
+          type: ["number", "null"]
+        shelfLife:
+          type: ["integer", "null"]
+        shelfLifeUnit:
+          type: ["string", "null"]
+        storageCondition:
+          type: ["string", "null"]
+        exFactoryPrice:
+          type: ["number", "null"]
+        fobPrice:
+          type: ["number", "null"]
+        moq:
+          type: ["integer", "null"]
+        moqUnit:
+          type: ["string", "null"]
+        fdaNumber:
+          type: ["string", "null"]
+        barcodeEan13:
+          type: ["string", "null"]
+        halalCertified:
+          type: boolean
+        gmpCertified:
+          type: boolean
+        haccpCertified:
+          type: boolean
+        organicCertified:
+          type: boolean
+        otherCertifications:
+          type: ["string", "null"]
+        ingredientsListThai:
+          type: ["string", "null"]
+        ingredientsListEnglish:
+          type: ["string", "null"]
+        allergenInfo:
+          type: ["string", "null"]
+        nutritionalInfo:
           type: ["string", "null"]
         costLines:
           type: array
@@ -1231,15 +1329,17 @@ components:
             $ref: "#/components/schemas/AddCostLineBody"
       required:
         - skuCode
-        - name
-        - category
-        - unitSize
+        - nameThai
         - sellPrice
 
     UpdateSkuBody:
       type: object
       properties:
         name:
+          type: ["string", "null"]
+        nameThai:
+          type: ["string", "null"]
+        brandName:
           type: ["string", "null"]
         category:
           type: ["string", "null"]
@@ -1248,6 +1348,64 @@ components:
         sellPrice:
           type: ["number", "null"]
         customerName:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        netWeight:
+          type: ["number", "null"]
+        netWeightUnit:
+          type: ["string", "null"]
+        grossWeight:
+          type: ["number", "null"]
+        grossWeightUnit:
+          type: ["string", "null"]
+        unitsPerCarton:
+          type: ["integer", "null"]
+        cartonGrossWeight:
+          type: ["number", "null"]
+        cartonGrossWeightUnit:
+          type: ["string", "null"]
+        cartonDimL:
+          type: ["number", "null"]
+        cartonDimW:
+          type: ["number", "null"]
+        cartonDimH:
+          type: ["number", "null"]
+        shelfLife:
+          type: ["integer", "null"]
+        shelfLifeUnit:
+          type: ["string", "null"]
+        storageCondition:
+          type: ["string", "null"]
+        exFactoryPrice:
+          type: ["number", "null"]
+        fobPrice:
+          type: ["number", "null"]
+        moq:
+          type: ["integer", "null"]
+        moqUnit:
+          type: ["string", "null"]
+        fdaNumber:
+          type: ["string", "null"]
+        barcodeEan13:
+          type: ["string", "null"]
+        halalCertified:
+          type: ["boolean", "null"]
+        gmpCertified:
+          type: ["boolean", "null"]
+        haccpCertified:
+          type: ["boolean", "null"]
+        organicCertified:
+          type: ["boolean", "null"]
+        otherCertifications:
+          type: ["string", "null"]
+        ingredientsListThai:
+          type: ["string", "null"]
+        ingredientsListEnglish:
+          type: ["string", "null"]
+        allergenInfo:
+          type: ["string", "null"]
+        nutritionalInfo:
           type: ["string", "null"]
 
     CostLine:

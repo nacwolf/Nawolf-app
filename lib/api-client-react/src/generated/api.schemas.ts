@@ -268,15 +268,46 @@ export interface SkuSnapshot {
   createdAt: string;
 }
 
+export interface SkuProductPhoto {
+  id: number;
+  skuId: number;
+  objectPath: string;
+  /** @nullable */
+  contentType?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  sortOrder: number;
+  uploadedAt: string;
+}
+
+export interface SkuCertificateFile {
+  id: number;
+  skuId: number;
+  objectPath: string;
+  /** @nullable */
+  contentType?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  uploadedAt: string;
+}
+
 export interface SkuDetail {
   id: number;
   skuCode: string;
   name: string;
-  category: string;
-  unitSize: string;
+  /** @nullable */
+  nameThai?: string | null;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  unitSize?: string | null;
   sellPrice: number;
   /** @nullable */
   customerName?: string | null;
+  /** @nullable */
+  notes?: string | null;
   createdAt: string;
   /** @nullable */
   totalCogs?: number | null;
@@ -285,6 +316,8 @@ export interface SkuDetail {
   status: SkuDetailStatus;
   costLines: CostLine[];
   snapshots: SkuSnapshot[];
+  productPhotos?: SkuProductPhoto[];
+  certificateFiles?: SkuCertificateFile[];
 }
 
 export interface AddCostLineBody {
@@ -296,18 +329,82 @@ export interface AddCostLineBody {
 
 export interface CreateSkuBody {
   skuCode: string;
-  name: string;
-  category: string;
-  unitSize: string;
+  nameThai: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  unitSize?: string | null;
   sellPrice: number;
   /** @nullable */
   customerName?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  netWeight?: number | null;
+  /** @nullable */
+  netWeightUnit?: string | null;
+  /** @nullable */
+  grossWeight?: number | null;
+  /** @nullable */
+  grossWeightUnit?: string | null;
+  /** @nullable */
+  unitsPerCarton?: number | null;
+  /** @nullable */
+  cartonGrossWeight?: number | null;
+  /** @nullable */
+  cartonGrossWeightUnit?: string | null;
+  /** @nullable */
+  cartonDimL?: number | null;
+  /** @nullable */
+  cartonDimW?: number | null;
+  /** @nullable */
+  cartonDimH?: number | null;
+  /** @nullable */
+  shelfLife?: number | null;
+  /** @nullable */
+  shelfLifeUnit?: string | null;
+  /** @nullable */
+  storageCondition?: string | null;
+  /** @nullable */
+  exFactoryPrice?: number | null;
+  /** @nullable */
+  fobPrice?: number | null;
+  /** @nullable */
+  moq?: number | null;
+  /** @nullable */
+  moqUnit?: string | null;
+  /** @nullable */
+  fdaNumber?: string | null;
+  /** @nullable */
+  barcodeEan13?: string | null;
+  halalCertified?: boolean;
+  gmpCertified?: boolean;
+  haccpCertified?: boolean;
+  organicCertified?: boolean;
+  /** @nullable */
+  otherCertifications?: string | null;
+  /** @nullable */
+  ingredientsListThai?: string | null;
+  /** @nullable */
+  ingredientsListEnglish?: string | null;
+  /** @nullable */
+  allergenInfo?: string | null;
+  /** @nullable */
+  nutritionalInfo?: string | null;
   costLines?: AddCostLineBody[];
 }
 
 export interface UpdateSkuBody {
   /** @nullable */
   name?: string | null;
+  /** @nullable */
+  nameThai?: string | null;
+  /** @nullable */
+  brandName?: string | null;
   /** @nullable */
   category?: string | null;
   /** @nullable */
@@ -316,6 +413,64 @@ export interface UpdateSkuBody {
   sellPrice?: number | null;
   /** @nullable */
   customerName?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  netWeight?: number | null;
+  /** @nullable */
+  netWeightUnit?: string | null;
+  /** @nullable */
+  grossWeight?: number | null;
+  /** @nullable */
+  grossWeightUnit?: string | null;
+  /** @nullable */
+  unitsPerCarton?: number | null;
+  /** @nullable */
+  cartonGrossWeight?: number | null;
+  /** @nullable */
+  cartonGrossWeightUnit?: string | null;
+  /** @nullable */
+  cartonDimL?: number | null;
+  /** @nullable */
+  cartonDimW?: number | null;
+  /** @nullable */
+  cartonDimH?: number | null;
+  /** @nullable */
+  shelfLife?: number | null;
+  /** @nullable */
+  shelfLifeUnit?: string | null;
+  /** @nullable */
+  storageCondition?: string | null;
+  /** @nullable */
+  exFactoryPrice?: number | null;
+  /** @nullable */
+  fobPrice?: number | null;
+  /** @nullable */
+  moq?: number | null;
+  /** @nullable */
+  moqUnit?: string | null;
+  /** @nullable */
+  fdaNumber?: string | null;
+  /** @nullable */
+  barcodeEan13?: string | null;
+  /** @nullable */
+  halalCertified?: boolean | null;
+  /** @nullable */
+  gmpCertified?: boolean | null;
+  /** @nullable */
+  haccpCertified?: boolean | null;
+  /** @nullable */
+  organicCertified?: boolean | null;
+  /** @nullable */
+  otherCertifications?: string | null;
+  /** @nullable */
+  ingredientsListThai?: string | null;
+  /** @nullable */
+  ingredientsListEnglish?: string | null;
+  /** @nullable */
+  allergenInfo?: string | null;
+  /** @nullable */
+  nutritionalInfo?: string | null;
 }
 
 export interface DashboardSummary {

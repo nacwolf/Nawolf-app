@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useGetSku, useUpdateSku, useAddSkuCostLine, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey, useGetSkuPrintingBlockConfig } from "@workspace/api-client-react";
 import { PrintingBlockPanel } from "@/components/printing-block-panel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,8 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp, FileText, ImagePlus, X, Upload, Save } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -243,6 +246,143 @@ export default function SkuDetail({ id }: { id: string }) {
   const [changeReason, setChangeReason] = useState<string>("");
   const [changeNote, setChangeNote] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // ── New spec sections ──
+  const [specOpen, setSpecOpen] = useState<Record<string, boolean>>({ II: false, III: false, IV: false, V: false });
+  const toggleSpec = (s: string) => setSpecOpen(p => ({ ...p, [s]: !p[s] }));
+
+  // Spec II edit state
+  const [editingSpec, setEditingSpec] = useState<string | null>(null);
+  const [specDraft, setSpecDraft] = useState<Record<string, any>>({});
+  const [savingSpec, setSavingSpec] = useState(false);
+
+  function startEditSpec(section: string) {
+    const s = sku as any;
+    const base: Record<string, any> = {};
+    if (section === "II") {
+      Object.assign(base, {
+        unitSize: s?.unitSize ?? "", netWeight: s?.netWeight ?? "", netWeightUnit: s?.netWeightUnit ?? "g",
+        grossWeight: s?.grossWeight ?? "", grossWeightUnit: s?.grossWeightUnit ?? "g",
+        unitsPerCarton: s?.unitsPerCarton ?? "", cartonGrossWeight: s?.cartonGrossWeight ?? "",
+        cartonGrossWeightUnit: s?.cartonGrossWeightUnit ?? "kg",
+        cartonDimL: s?.cartonDimL ?? "", cartonDimW: s?.cartonDimW ?? "", cartonDimH: s?.cartonDimH ?? "",
+        shelfLife: s?.shelfLife ?? "", shelfLifeUnit: s?.shelfLifeUnit ?? "days",
+        storageCondition: s?.storageCondition ?? "",
+      });
+    } else if (section === "III") {
+      Object.assign(base, {
+        exFactoryPrice: s?.exFactoryPrice ?? "", fobPrice: s?.fobPrice ?? "",
+        moq: s?.moq ?? "", moqUnit: s?.moqUnit ?? "units",
+      });
+    } else if (section === "IV") {
+      Object.assign(base, {
+        fdaNumber: s?.fdaNumber ?? "", barcodeEan13: s?.barcodeEan13 ?? "",
+        halalCertified: !!s?.halalCertified, gmpCertified: !!s?.gmpCertified,
+        haccpCertified: !!s?.haccpCertified, organicCertified: !!s?.organicCertified,
+        otherCertifications: s?.otherCertifications ?? "",
+      });
+    } else if (section === "V") {
+      Object.assign(base, {
+        ingredientsListThai: s?.ingredientsListThai ?? "", ingredientsListEnglish: s?.ingredientsListEnglish ?? "",
+        allergenInfo: s?.allergenInfo ?? "", nutritionalInfo: s?.nutritionalInfo ?? "",
+      });
+    }
+    setSpecDraft(base);
+    setEditingSpec(section);
+  }
+
+  async function saveSpec(section: string) {
+    setSavingSpec(true);
+    try {
+      const patch: Record<string, any> = {};
+      const d = specDraft;
+      if (section === "II") {
+        patch.unitSize = d.unitSize || null;
+        patch.netWeight = d.netWeight !== "" ? parseFloat(d.netWeight) : null;
+        patch.netWeightUnit = d.netWeightUnit || null;
+        patch.grossWeight = d.grossWeight !== "" ? parseFloat(d.grossWeight) : null;
+        patch.grossWeightUnit = d.grossWeightUnit || null;
+        patch.unitsPerCarton = d.unitsPerCarton !== "" ? parseInt(d.unitsPerCarton, 10) : null;
+        patch.cartonGrossWeight = d.cartonGrossWeight !== "" ? parseFloat(d.cartonGrossWeight) : null;
+        patch.cartonGrossWeightUnit = d.cartonGrossWeightUnit || null;
+        patch.cartonDimL = d.cartonDimL !== "" ? parseFloat(d.cartonDimL) : null;
+        patch.cartonDimW = d.cartonDimW !== "" ? parseFloat(d.cartonDimW) : null;
+        patch.cartonDimH = d.cartonDimH !== "" ? parseFloat(d.cartonDimH) : null;
+        patch.shelfLife = d.shelfLife !== "" ? parseInt(d.shelfLife, 10) : null;
+        patch.shelfLifeUnit = d.shelfLifeUnit || null;
+        patch.storageCondition = d.storageCondition || null;
+      } else if (section === "III") {
+        patch.exFactoryPrice = d.exFactoryPrice !== "" ? parseFloat(d.exFactoryPrice) : null;
+        patch.fobPrice = d.fobPrice !== "" ? parseFloat(d.fobPrice) : null;
+        patch.moq = d.moq !== "" ? parseInt(d.moq, 10) : null;
+        patch.moqUnit = d.moqUnit || null;
+      } else if (section === "IV") {
+        patch.fdaNumber = d.fdaNumber || null;
+        patch.barcodeEan13 = d.barcodeEan13 || null;
+        patch.halalCertified = !!d.halalCertified;
+        patch.gmpCertified = !!d.gmpCertified;
+        patch.haccpCertified = !!d.haccpCertified;
+        patch.organicCertified = !!d.organicCertified;
+        patch.otherCertifications = d.otherCertifications || null;
+      } else if (section === "V") {
+        patch.ingredientsListThai = d.ingredientsListThai || null;
+        patch.ingredientsListEnglish = d.ingredientsListEnglish || null;
+        patch.allergenInfo = d.allergenInfo || null;
+        patch.nutritionalInfo = d.nutritionalInfo || null;
+      }
+      await updateSku.mutateAsync({ id: skuId, data: patch });
+      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      setEditingSpec(null);
+      toast({ title: "Saved" });
+    } catch {
+      toast({ variant: "destructive", title: "Save failed" });
+    } finally {
+      setSavingSpec(false);
+    }
+  }
+
+  // File upload helpers for detail page
+  const labelRef = useRef<HTMLInputElement>(null);
+  const specRef = useRef<HTMLInputElement>(null);
+  const dielineRef = useRef<HTMLInputElement>(null);
+  const prodPhotosRef = useRef<HTMLInputElement>(null);
+  const certsRef = useRef<HTMLInputElement>(null);
+  const [uploadingFile, setUploadingFile] = useState<string | null>(null);
+
+  async function uploadSingleFile(file: File, endpoint: string, method: "PATCH" | "POST" = "PATCH") {
+    setUploadingFile(endpoint);
+    try {
+      const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json();
+      const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+      if (!putRes.ok) throw new Error("Upload failed");
+      await fetch(getApiUrl(endpoint), {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectPath, contentType: file.type, fileName: file.name }),
+      });
+      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      toast({ title: "File uploaded" });
+    } catch (err) {
+      toast({ variant: "destructive", title: err instanceof Error ? err.message : "Upload failed" });
+    } finally {
+      setUploadingFile(null);
+    }
+  }
+
+  async function deleteFile(endpoint: string) {
+    try {
+      await fetch(getApiUrl(endpoint), { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
+      toast({ title: "File removed" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to remove file" });
+    }
+  }
 
   const ingMap = useMemo(() => {
     if (!ingredients) return {} as Record<number, any>;
@@ -1156,6 +1296,307 @@ export default function SkuDetail({ id }: { id: string }) {
             </div>
           )}
         </CardContent>
+      </Card>
+
+      {/* ── Section II — Physical Specifications ── */}
+      <Card>
+        <button type="button" className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg" onClick={() => toggleSpec("II")}>
+          <span className="text-sm font-semibold">II — Physical Specifications</span>
+          {specOpen.II ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {specOpen.II && (
+          <CardContent className="space-y-4">
+            {editingSpec === "II" ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1"><label className="text-sm font-medium">Unit Size Description</label><Input placeholder="e.g. 40g bag" value={specDraft.unitSize ?? ""} onChange={e => setSpecDraft(p => ({ ...p, unitSize: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Units per Carton</label><Input type="number" min="1" value={specDraft.unitsPerCarton ?? ""} onChange={e => setSpecDraft(p => ({ ...p, unitsPerCarton: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Net Weight</label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="0.01" className="flex-1" value={specDraft.netWeight ?? ""} onChange={e => setSpecDraft(p => ({ ...p, netWeight: e.target.value }))} />
+                      <Select value={specDraft.netWeightUnit || "g"} onValueChange={v => setSpecDraft(p => ({ ...p, netWeightUnit: v }))}>
+                        <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                        <SelectContent>{["g","kg","ml","l"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Gross Weight</label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="0.01" className="flex-1" value={specDraft.grossWeight ?? ""} onChange={e => setSpecDraft(p => ({ ...p, grossWeight: e.target.value }))} />
+                      <Select value={specDraft.grossWeightUnit || "g"} onValueChange={v => setSpecDraft(p => ({ ...p, grossWeightUnit: v }))}>
+                        <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                        <SelectContent>{["g","kg","ml","l"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Carton Gross Weight</label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="0.01" className="flex-1" value={specDraft.cartonGrossWeight ?? ""} onChange={e => setSpecDraft(p => ({ ...p, cartonGrossWeight: e.target.value }))} />
+                      <Select value={specDraft.cartonGrossWeightUnit || "kg"} onValueChange={v => setSpecDraft(p => ({ ...p, cartonGrossWeightUnit: v }))}>
+                        <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                        <SelectContent>{["g","kg"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Shelf Life</label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="1" className="flex-1" value={specDraft.shelfLife ?? ""} onChange={e => setSpecDraft(p => ({ ...p, shelfLife: e.target.value }))} />
+                      <Select value={specDraft.shelfLifeUnit || "days"} onValueChange={v => setSpecDraft(p => ({ ...p, shelfLifeUnit: v }))}>
+                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectContent>{["days","months","years"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1"><label className="text-sm font-medium">Carton Dimensions (L × W × H in cm)</label>
+                  <div className="flex items-center gap-2">
+                    <Input type="number" step="0.1" placeholder="L" className="flex-1" value={specDraft.cartonDimL ?? ""} onChange={e => setSpecDraft(p => ({ ...p, cartonDimL: e.target.value }))} />
+                    <span className="text-muted-foreground text-sm">×</span>
+                    <Input type="number" step="0.1" placeholder="W" className="flex-1" value={specDraft.cartonDimW ?? ""} onChange={e => setSpecDraft(p => ({ ...p, cartonDimW: e.target.value }))} />
+                    <span className="text-muted-foreground text-sm">×</span>
+                    <Input type="number" step="0.1" placeholder="H" className="flex-1" value={specDraft.cartonDimH ?? ""} onChange={e => setSpecDraft(p => ({ ...p, cartonDimH: e.target.value }))} />
+                    <span className="text-muted-foreground text-xs">cm</span>
+                  </div>
+                </div>
+                <div className="space-y-1"><label className="text-sm font-medium">Storage Condition</label><Input placeholder="e.g. Store in cool dry place" value={specDraft.storageCondition ?? ""} onChange={e => setSpecDraft(p => ({ ...p, storageCondition: e.target.value }))} /></div>
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                  <Button size="sm" onClick={() => saveSpec("II")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => { const s = sku as any; return (
+                  <div className="grid gap-3 md:grid-cols-2 text-sm">
+                    {s?.unitSize && <div><span className="text-muted-foreground">Unit Size: </span><span className="font-medium">{s.unitSize}</span></div>}
+                    {s?.netWeight && <div><span className="text-muted-foreground">Net Weight: </span><span className="font-medium">{s.netWeight} {s.netWeightUnit}</span></div>}
+                    {s?.grossWeight && <div><span className="text-muted-foreground">Gross Weight: </span><span className="font-medium">{s.grossWeight} {s.grossWeightUnit}</span></div>}
+                    {s?.unitsPerCarton && <div><span className="text-muted-foreground">Units/Carton: </span><span className="font-medium">{s.unitsPerCarton}</span></div>}
+                    {s?.cartonGrossWeight && <div><span className="text-muted-foreground">Carton Weight: </span><span className="font-medium">{s.cartonGrossWeight} {s.cartonGrossWeightUnit}</span></div>}
+                    {(s?.cartonDimL || s?.cartonDimW || s?.cartonDimH) && <div><span className="text-muted-foreground">Carton Dims: </span><span className="font-medium">{s.cartonDimL} × {s.cartonDimW} × {s.cartonDimH} cm</span></div>}
+                    {s?.shelfLife && <div><span className="text-muted-foreground">Shelf Life: </span><span className="font-medium">{s.shelfLife} {s.shelfLifeUnit}</span></div>}
+                    {s?.storageCondition && <div className="md:col-span-2"><span className="text-muted-foreground">Storage: </span><span className="font-medium">{s.storageCondition}</span></div>}
+                    {!s?.unitSize && !s?.netWeight && !s?.grossWeight && !s?.unitsPerCarton && <div className="md:col-span-2 text-muted-foreground text-sm py-2">No specifications added yet.</div>}
+                  </div>
+                ); })()}
+                <Button variant="outline" size="sm" onClick={() => { startEditSpec("II"); }}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ── Section III — Pricing & Commercial ── */}
+      <Card>
+        <button type="button" className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg" onClick={() => toggleSpec("III")}>
+          <span className="text-sm font-semibold">III — Pricing & Commercial</span>
+          {specOpen.III ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {specOpen.III && (
+          <CardContent className="space-y-4">
+            {editingSpec === "III" ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1"><label className="text-sm font-medium">Ex-Factory Price (฿)</label><Input type="number" step="0.01" value={specDraft.exFactoryPrice ?? ""} onChange={e => setSpecDraft(p => ({ ...p, exFactoryPrice: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">FOB Price (฿)</label><Input type="number" step="0.01" value={specDraft.fobPrice ?? ""} onChange={e => setSpecDraft(p => ({ ...p, fobPrice: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">MOQ</label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="1" className="flex-1" value={specDraft.moq ?? ""} onChange={e => setSpecDraft(p => ({ ...p, moq: e.target.value }))} />
+                      <Select value={specDraft.moqUnit || "units"} onValueChange={v => setSpecDraft(p => ({ ...p, moqUnit: v }))}>
+                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectContent>{["units","cartons","kg"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                  <Button size="sm" onClick={() => saveSpec("III")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => { const s = sku as any; return (
+                  <div className="grid gap-3 md:grid-cols-3 text-sm">
+                    {s?.exFactoryPrice != null && <div><span className="text-muted-foreground">Ex-Factory: </span><span className="font-medium">{formatCurrency(s.exFactoryPrice)}</span></div>}
+                    {s?.fobPrice != null && <div><span className="text-muted-foreground">FOB: </span><span className="font-medium">{formatCurrency(s.fobPrice)}</span></div>}
+                    {s?.moq != null && <div><span className="text-muted-foreground">MOQ: </span><span className="font-medium">{s.moq.toLocaleString()} {s.moqUnit}</span></div>}
+                    {s?.exFactoryPrice == null && s?.fobPrice == null && s?.moq == null && <div className="col-span-3 text-muted-foreground py-2">No commercial details added yet.</div>}
+                  </div>
+                ); })()}
+                <Button variant="outline" size="sm" onClick={() => startEditSpec("III")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ── Section IV — Regulatory & Compliance ── */}
+      <Card>
+        <button type="button" className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg" onClick={() => toggleSpec("IV")}>
+          <span className="text-sm font-semibold">IV — Regulatory & Compliance</span>
+          {specOpen.IV ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {specOpen.IV && (
+          <CardContent className="space-y-4">
+            {editingSpec === "IV" ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1"><label className="text-sm font-medium">FDA Registration Number</label><Input placeholder="e.g. 10-3-12345-1-0001" value={specDraft.fdaNumber ?? ""} onChange={e => setSpecDraft(p => ({ ...p, fdaNumber: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Barcode EAN-13</label><Input placeholder="13-digit barcode" maxLength={13} value={specDraft.barcodeEan13 ?? ""} onChange={e => setSpecDraft(p => ({ ...p, barcodeEan13: e.target.value }))} /></div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {([["halalCertified","Halal"],["gmpCertified","GMP"],["haccpCertified","HACCP"],["organicCertified","Organic"]] as const).map(([key, label]) => (
+                    <div key={key} className="flex items-center gap-2 rounded-lg border p-3">
+                      <Switch checked={!!specDraft[key]} onCheckedChange={v => setSpecDraft(p => ({ ...p, [key]: v }))} />
+                      <span className="text-sm font-medium">{label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1"><label className="text-sm font-medium">Other Certifications</label><Input placeholder="e.g. ISO 22000, BRC" value={specDraft.otherCertifications ?? ""} onChange={e => setSpecDraft(p => ({ ...p, otherCertifications: e.target.value }))} /></div>
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                  <Button size="sm" onClick={() => saveSpec("IV")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => { const s = sku as any; return (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {s?.halalCertified && <Badge variant="secondary">Halal</Badge>}
+                      {s?.gmpCertified && <Badge variant="secondary">GMP</Badge>}
+                      {s?.haccpCertified && <Badge variant="secondary">HACCP</Badge>}
+                      {s?.organicCertified && <Badge variant="secondary">Organic</Badge>}
+                    </div>
+                    <div className="grid gap-2 text-sm md:grid-cols-2">
+                      {s?.fdaNumber && <div><span className="text-muted-foreground">FDA: </span><span className="font-medium font-mono">{s.fdaNumber}</span></div>}
+                      {s?.barcodeEan13 && <div><span className="text-muted-foreground">EAN-13: </span><span className="font-medium font-mono">{s.barcodeEan13}</span></div>}
+                      {s?.otherCertifications && <div className="md:col-span-2"><span className="text-muted-foreground">Other: </span><span className="font-medium">{s.otherCertifications}</span></div>}
+                    </div>
+                    {!s?.halalCertified && !s?.gmpCertified && !s?.haccpCertified && !s?.organicCertified && !s?.fdaNumber && !s?.barcodeEan13 && <p className="text-muted-foreground text-sm py-1">No compliance data added yet.</p>}
+                  </div>
+                ); })()}
+                <Button variant="outline" size="sm" onClick={() => startEditSpec("IV")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ── Section V — Labelling & Files ── */}
+      <Card>
+        <button type="button" className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg" onClick={() => toggleSpec("V")}>
+          <span className="text-sm font-semibold">V — Labelling & Files</span>
+          {specOpen.V ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {specOpen.V && (
+          <CardContent className="space-y-6">
+            {/* Text fields */}
+            {editingSpec === "V" ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1"><label className="text-sm font-medium">Ingredients List (Thai)</label><Textarea rows={3} value={specDraft.ingredientsListThai ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListThai: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Ingredients List (English)</label><Textarea rows={3} value={specDraft.ingredientsListEnglish ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListEnglish: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Allergen Information</label><Textarea rows={2} value={specDraft.allergenInfo ?? ""} onChange={e => setSpecDraft(p => ({ ...p, allergenInfo: e.target.value }))} /></div>
+                  <div className="space-y-1"><label className="text-sm font-medium">Nutritional Info</label><Textarea rows={2} value={specDraft.nutritionalInfo ?? ""} onChange={e => setSpecDraft(p => ({ ...p, nutritionalInfo: e.target.value }))} /></div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                  <Button size="sm" onClick={() => saveSpec("V")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => { const s = sku as any; return (
+                  <div className="grid gap-3 md:grid-cols-2 text-sm">
+                    {s?.ingredientsListThai && <div><p className="text-muted-foreground text-xs mb-1">Ingredients (Thai)</p><p className="whitespace-pre-wrap">{s.ingredientsListThai}</p></div>}
+                    {s?.ingredientsListEnglish && <div><p className="text-muted-foreground text-xs mb-1">Ingredients (English)</p><p className="whitespace-pre-wrap">{s.ingredientsListEnglish}</p></div>}
+                    {s?.allergenInfo && <div><p className="text-muted-foreground text-xs mb-1">Allergens</p><p>{s.allergenInfo}</p></div>}
+                    {s?.nutritionalInfo && <div><p className="text-muted-foreground text-xs mb-1">Nutritional Info</p><p className="whitespace-pre-wrap">{s.nutritionalInfo}</p></div>}
+                    {!s?.ingredientsListThai && !s?.ingredientsListEnglish && !s?.allergenInfo && !s?.nutritionalInfo && <p className="md:col-span-2 text-muted-foreground py-1">No label text added yet.</p>}
+                  </div>
+                ); })()}
+                <Button variant="outline" size="sm" onClick={() => startEditSpec("V")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            )}
+
+            {/* Single file uploads */}
+            <div className="grid gap-4 md:grid-cols-3 pt-2 border-t">
+              {([
+                { label: "Label File", urlKey: "labelFileUrl", nameKey: "labelFileName", endpoint: `/skus/${skuId}/label-file`, ref: labelRef, accept: ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" },
+                { label: "Spec Sheet", urlKey: "specSheetUrl", nameKey: "specSheetFileName", endpoint: `/skus/${skuId}/spec-sheet`, ref: specRef, accept: ".pdf,application/pdf" },
+                { label: "Packaging Dieline", urlKey: "dielineUrl", nameKey: "dielineFileName", endpoint: `/skus/${skuId}/dieline`, ref: dielineRef, accept: ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" },
+              ]).map(({ label, urlKey, nameKey, endpoint, ref, accept }) => {
+                const s = sku as any;
+                const fileUrl = s?.[urlKey] ? getApiUrl(`/storage${s[urlKey]}`) : null;
+                const fileName = s?.[nameKey] ?? "View file";
+                return (
+                  <div key={label} className="space-y-1">
+                    <label className="text-sm font-medium">{label}</label>
+                    {fileUrl ? (
+                      <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
+                        <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 text-xs truncate text-primary hover:underline">{fileName}</a>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => deleteFile(endpoint)} title="Remove"><X className="w-3 h-3" /></Button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => ref.current?.click()} disabled={uploadingFile === endpoint} className="flex items-center gap-2 w-full border-2 border-dashed border-muted-foreground/25 rounded-lg px-3 py-2 hover:border-primary/50 hover:bg-muted/20 transition-colors text-sm text-muted-foreground disabled:opacity-50">
+                        {uploadingFile === endpoint ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}Upload
+                      </button>
+                    )}
+                    <input ref={ref} type="file" accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadSingleFile(f, endpoint); }} />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Product photos (multi) */}
+            <div className="space-y-2 pt-2 border-t">
+              <label className="text-sm font-medium">Product Photos</label>
+              <div className="flex flex-wrap gap-2">
+                {((sku as any)?.productPhotos ?? []).map((photo: any) => (
+                  <div key={photo.id} className="relative group w-20 h-20">
+                    <img src={getApiUrl(`/storage${photo.objectPath}`)} alt={photo.fileName ?? ""} className="w-full h-full object-cover rounded-lg border" />
+                    <button type="button" onClick={() => fetch(getApiUrl(`/skus/${skuId}/product-photos/${photo.id}`), { method: "DELETE" }).then(() => qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) }))} className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => prodPhotosRef.current?.click()} disabled={!!uploadingFile} className="flex flex-col items-center justify-center w-20 h-20 border-2 border-dashed border-muted-foreground/25 rounded-lg hover:border-primary/50 hover:bg-muted/20 transition-colors disabled:opacity-50">
+                  {uploadingFile === "photos" ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : <ImagePlus className="w-5 h-5 text-muted-foreground" />}
+                </button>
+              </div>
+              <input ref={prodPhotosRef} type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple className="hidden" onChange={async e => {
+                const files = Array.from(e.target.files ?? []); e.target.value = "";
+                setUploadingFile("photos");
+                try { for (const f of files) await uploadSingleFile(f, `/skus/${skuId}/product-photos`, "POST"); } finally { setUploadingFile(null); }
+              }} />
+            </div>
+
+            {/* Certificate files (multi) */}
+            <div className="space-y-2 pt-2 border-t">
+              <label className="text-sm font-medium">Certificate Files</label>
+              <div className="space-y-1">
+                {((sku as any)?.certificateFiles ?? []).map((cf: any) => (
+                  <div key={cf.id} className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2 text-sm group">
+                    <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <a href={getApiUrl(`/storage${cf.objectPath}`)} target="_blank" rel="noopener noreferrer" className="flex-1 text-xs truncate text-primary hover:underline">{cf.fileName ?? "Certificate"}</a>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100" onClick={() => fetch(getApiUrl(`/skus/${skuId}/certificate-files/${cf.id}`), { method: "DELETE" }).then(() => qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) }))}><X className="w-3 h-3" /></Button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => certsRef.current?.click()} disabled={!!uploadingFile} className="flex items-center gap-2 w-full border-2 border-dashed border-muted-foreground/25 rounded-lg px-3 py-2 hover:border-primary/50 hover:bg-muted/20 transition-colors text-sm text-muted-foreground disabled:opacity-50">
+                  {uploadingFile === "certs" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}Add certificate files (PDF)
+                </button>
+              </div>
+              <input ref={certsRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={async e => {
+                const files = Array.from(e.target.files ?? []); e.target.value = "";
+                setUploadingFile("certs");
+                try { for (const f of files) await uploadSingleFile(f, `/skus/${skuId}/certificate-files`, "POST"); } finally { setUploadingFile(null); }
+              }} />
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* ── Add Cost Line Dialog ── */}
