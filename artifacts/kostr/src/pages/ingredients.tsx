@@ -25,7 +25,6 @@ import { getApiUrl } from "@/lib/queryClient";
 
 const INGREDIENT_CATEGORIES = [
   "Raw Materials",
-  "Packaging",
   "Quality & Compliance",
   "Delivery",
 ] as const;
@@ -77,6 +76,7 @@ export default function CostLibrary() {
   });
 
   const [search, setSearch] = useState("");
+  const [packagingCategoryFilter, setPackagingCategoryFilter] = useState<string>("all");
   const [editTeamMember, setEditTeamMember] = useState<TeamMember | null>(null);
   const [addTeamOpen, setAddTeamOpen] = useState(false);
 
@@ -124,16 +124,27 @@ export default function CostLibrary() {
   const watchedOncost = teamMemberForm.watch("oncostPercent");
   const previewLoadedRate = (parseFloat(String(watchedWage)) || 0) * (1 + (parseFloat(String(watchedOncost)) || 0) / 100);
 
+  const packagingCategoriesWithItems = useMemo(() => {
+    if (!packagingItems) return [];
+    const seen = new Set(packagingItems.map(i => i.category));
+    return PACKAGING_CATEGORIES.filter(c => seen.has(c.value as string));
+  }, [packagingItems]);
+
   const filteredPackaging = useMemo(() => {
-    if (!packagingItems) return packagingItems;
-    if (!search) return packagingItems;
-    const q = search.toLowerCase();
-    return packagingItems.filter(i =>
-      i.nameEnglish.toLowerCase().includes(q) ||
-      (i.nameThai || "").toLowerCase().includes(q) ||
-      (i.supplier || "").toLowerCase().includes(q)
-    );
-  }, [packagingItems, search]);
+    let items = packagingItems ?? [];
+    if (packagingCategoryFilter !== "all") {
+      items = items.filter(i => i.category === packagingCategoryFilter);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      items = items.filter(i =>
+        i.nameEnglish.toLowerCase().includes(q) ||
+        (i.nameThai || "").toLowerCase().includes(q) ||
+        (i.supplier || "").toLowerCase().includes(q)
+      );
+    }
+    return items;
+  }, [packagingItems, packagingCategoryFilter, search]);
 
   const filteredIngredients = useMemo(() => {
     if (!search || !ingredients) return ingredients;
@@ -495,10 +506,40 @@ export default function CostLibrary() {
                 </button>
               </div>
 
+              {packagingCategoriesWithItems.length > 1 && (
+                <div className="px-6 py-2 border-b flex flex-wrap gap-1.5 bg-violet-50/40">
+                  <button
+                    onClick={() => setPackagingCategoryFilter("all")}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      packagingCategoryFilter === "all"
+                        ? "bg-violet-600 text-white border-violet-600"
+                        : "text-violet-700 border-violet-200 hover:border-violet-400 bg-white"
+                    }`}
+                  >
+                    All
+                  </button>
+                  {packagingCategoriesWithItems.map(cat => (
+                    <button
+                      key={cat.value}
+                      onClick={() => setPackagingCategoryFilter(cat.value)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        packagingCategoryFilter === cat.value
+                          ? "bg-violet-600 text-white border-violet-600"
+                          : "text-violet-700 border-violet-200 hover:border-violet-400 bg-white"
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {(filteredPackaging?.length ?? 0) === 0 ? (
                 <div className="py-6 text-center text-muted-foreground text-sm">
-                  No packaging items yet.{" "}
-                  <button onClick={() => setLocation("/packaging/new")} className="text-primary hover:underline">Add one →</button>
+                  {packagingCategoryFilter !== "all" || search
+                    ? "No items match the current filter."
+                    : <>No packaging items yet.{" "}<button onClick={() => setLocation("/packaging/new")} className="text-primary hover:underline">Add one →</button></>
+                  }
                 </div>
               ) : (
                 <Table>
