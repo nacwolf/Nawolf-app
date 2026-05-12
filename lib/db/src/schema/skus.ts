@@ -34,6 +34,7 @@ export const skusTable = pgTable("skus", {
   unitSize: text("unit_size").notNull(),
   sellPrice: numeric("sell_price", { precision: 12, scale: 4 }).notNull(),
   customerName: text("customer_name"),
+  photoUrl: text("photo_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

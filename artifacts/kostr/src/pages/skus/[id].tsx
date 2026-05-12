@@ -23,6 +23,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Link } from "wouter";
 import { getApiUrl } from "@/lib/queryClient";
+import { PhotoUpload } from "@/components/photo-upload";
 
 const CATEGORIES = [
   "Raw Materials",
@@ -522,6 +523,14 @@ export default function SkuDetail({ id }: { id: string }) {
             <span>Unit: <strong className="text-foreground">{sku.unitSize}</strong></span>
             {sku.customerName && <span>Customer: <strong className="text-foreground">{sku.customerName}</strong></span>}
           </div>
+        </div>
+        <div className="w-full md:w-44 flex-shrink-0">
+          <PhotoUpload
+            entityType="sku"
+            entityId={skuId}
+            currentPhotoUrl={(sku as any).photoUrl ?? null}
+            onUpdate={() => qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) })}
+          />
         </div>
       </div>
 

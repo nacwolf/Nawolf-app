@@ -9,6 +9,7 @@ import productionRouter from "./production";
 import overheadRouter from "./overhead";
 import storageRouter from "./storage";
 import printingBlocksRouter from "./printingBlocks";
+import photosRouter from "./photos";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(productionRouter);
 router.use(overheadRouter);
 router.use(storageRouter);
 router.use(printingBlocksRouter);
+router.use(photosRouter);
 
 export default router;

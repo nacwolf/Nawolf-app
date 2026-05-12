@@ -19,6 +19,7 @@ import IngredientsList from "@/pages/ingredients";
 import IngredientNew from "@/pages/ingredients/new";
 import IngredientDetail from "@/pages/ingredients/[id]";
 import ActivityFeed from "@/pages/activity";
+import TeamMembers from "@/pages/team-members";
 import NotFound from "@/pages/not-found";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -124,6 +125,10 @@ function ClerkProviderWithRoutes() {
 
             <Route path="/activity">
               <ProtectedRoute component={ActivityFeed} />
+            </Route>
+
+            <Route path="/team-members">
+              <ProtectedRoute component={TeamMembers} />
             </Route>
 
             <Route component={NotFound} />

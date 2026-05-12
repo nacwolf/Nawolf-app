@@ -7,6 +7,7 @@ import {
   LogOut,
   ChevronDown,
   Activity,
+  Users,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <Link href="/activity">
                     <Activity className="w-4 h-4" />
                     <span>Activity Feed</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location.startsWith("/team-members")}>
+                  <Link href="/team-members">
+                    <Users className="w-4 h-4" />
+                    <span>Team</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

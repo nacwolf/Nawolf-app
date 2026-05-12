@@ -16,6 +16,7 @@ export const ingredientsTable = pgTable("ingredients", {
   priceTier2Description: text("price_tier2_description"),
   notes: text("notes"),
   createdBy: text("created_by"),
+  photoUrl: text("photo_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

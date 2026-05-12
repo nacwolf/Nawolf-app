@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { getAuth } from "@clerk/express";
-import { db, ingredientAttachmentsTable } from "@workspace/db";
+import { db, ingredientAttachmentsTable, skusTable, ingredientsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -82,15 +82,24 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
 
-    // Authorization: the objectPath must correspond to a known attachment record.
-    // Any authenticated user can access attachments (internal multi-user tool).
-    const [attachment] = await db
-      .select({ id: ingredientAttachmentsTable.id })
-      .from(ingredientAttachmentsTable)
-      .where(eq(ingredientAttachmentsTable.objectPath, objectPath))
-      .limit(1);
+    // Authorization: objectPath must be registered in one of the known storage tables.
+    // Any authenticated user can access stored objects (internal multi-user tool).
+    const [attachment, skuPhoto, ingPhoto] = await Promise.all([
+      db.select({ id: ingredientAttachmentsTable.id })
+        .from(ingredientAttachmentsTable)
+        .where(eq(ingredientAttachmentsTable.objectPath, objectPath))
+        .limit(1),
+      db.select({ id: skusTable.id })
+        .from(skusTable)
+        .where(eq(skusTable.photoUrl, objectPath))
+        .limit(1),
+      db.select({ id: ingredientsTable.id })
+        .from(ingredientsTable)
+        .where(eq(ingredientsTable.photoUrl, objectPath))
+        .limit(1),
+    ]);
 
-    if (!attachment) {
+    if (!attachment[0] && !skuPhoto[0] && !ingPhoto[0]) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

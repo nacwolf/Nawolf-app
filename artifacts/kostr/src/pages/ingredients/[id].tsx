@@ -43,6 +43,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/queryClient";
+import { PhotoUpload } from "@/components/photo-upload";
 
 const UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
 
@@ -333,16 +334,26 @@ export default function IngredientDetail({ id }: { id: string }) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-16">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => setLocation("/ingredients")}>
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight">{ingredient.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {ingredient.category}{ingredient.subCategory ? ` · ${ingredient.subCategory}` : ""} · {ingredient.unit}
-            {ingredient.createdBy && <span className="ml-2">· Added by {ingredient.createdBy}</span>}
-          </p>
+      <div className="flex items-start gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Button variant="ghost" size="sm" onClick={() => setLocation("/ingredients")}>
+            <ArrowLeft className="w-4 h-4 mr-1" /> Back
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight">{ingredient.name}</h1>
+            <p className="text-sm text-muted-foreground">
+              {ingredient.category}{ingredient.subCategory ? ` · ${ingredient.subCategory}` : ""} · {ingredient.unit}
+              {ingredient.createdBy && <span className="ml-2">· Added by {ingredient.createdBy}</span>}
+            </p>
+          </div>
+        </div>
+        <div className="w-36 flex-shrink-0">
+          <PhotoUpload
+            entityType="ingredient"
+            entityId={ingredientId}
+            currentPhotoUrl={(ingredient as any).photoUrl ?? null}
+            onUpdate={() => qc.invalidateQueries({ queryKey: getGetIngredientQueryKey(ingredientId) })}
+          />
         </div>
       </div>
 
