@@ -8,8 +8,8 @@ import teamMembersRouter from "./team-members";
 import productionRouter from "./production";
 import overheadRouter from "./overhead";
 import storageRouter from "./storage";
-import printingBlocksRouter from "./printingBlocks";
 import photosRouter from "./photos";
+import packagingRouter from "./packaging";
 
 const router: IRouter = Router();
 
@@ -22,7 +22,7 @@ router.use(teamMembersRouter);
 router.use(productionRouter);
 router.use(overheadRouter);
 router.use(storageRouter);
-router.use(printingBlocksRouter);
 router.use(photosRouter);
+router.use(packagingRouter);
 
 export default router;

@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { useGetSku, useUpdateSku, useAddSkuCostLine, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey, useGetSkuPrintingBlockConfig } from "@workspace/api-client-react";
-import { PrintingBlockPanel } from "@/components/printing-block-panel";
+import { useGetSku, useUpdateSku, useAddSkuCostLine, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, formatPercent, formatDate, formatDateShort } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
@@ -44,7 +43,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Overhead": "#94a3b8",
   "Quality & Compliance": "#3b82f6",
   "Delivery": "#f59e0b",
-  "Printing Blocks": "#7c3aed",
 };
 
 const CATEGORY_BORDER: Record<string, string> = {
@@ -220,7 +218,6 @@ export default function SkuDetail({ id }: { id: string }) {
   const { toast } = useToast();
 
   const { data: sku, isLoading } = useGetSku(skuId, { query: { enabled: !isNaN(skuId) } });
-  const { data: blockConfig } = useGetSkuPrintingBlockConfig(skuId);
   const { data: ingredients } = useListIngredients();
 
   const updateSku = useUpdateSku();
@@ -534,12 +531,8 @@ export default function SkuDetail({ id }: { id: string }) {
     const result = Object.entries(totals)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
-    if (blockConfig && blockConfig.amortizedCostPerUnit > 0) {
-      result.push({ name: "Printing Blocks", value: blockConfig.amortizedCostPerUnit });
-      result.sort((a, b) => b.value - a.value);
-    }
     return result;
-  }, [sku?.costLines, blockConfig]);
+  }, [sku?.costLines]);
 
   const totalCategoryValue = categoryBreakdown.reduce((s, d) => s + d.value, 0);
 
@@ -971,17 +964,6 @@ export default function SkuDetail({ id }: { id: string }) {
               );
             })}
 
-            {blockConfig && blockConfig.amortizedCostPerUnit > 0 && (
-              <div className="border-l-4 border-l-purple-500 border-b">
-                <div className="px-4 py-2 bg-purple-50 flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">Printing Blocks</span>
-                  <span className="text-xs font-semibold text-purple-700">{formatCurrency(blockConfig.amortizedCostPerUnit)}</span>
-                </div>
-                <div className="px-4 py-2 text-xs text-muted-foreground italic">
-                  Printing Blocks (amortized over {blockConfig.moq.toLocaleString()} units) — {blockConfig.numBlocks} blocks × {formatCurrency(blockConfig.pricePerBlock)} ÷ {blockConfig.moq.toLocaleString()}
-                </div>
-              </div>
-            )}
 
             {(sku.costLines?.length ?? 0) > 0 && (
               <div className="px-4 py-3 flex items-center justify-between bg-muted/40 border-t mt-0">
@@ -992,8 +974,6 @@ export default function SkuDetail({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
-
-      <PrintingBlockPanel skuId={skuId} />
 
       {/* ── Production Setup ── */}
       <TooltipProvider>

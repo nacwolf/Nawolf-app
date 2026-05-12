@@ -558,3 +558,135 @@ export interface RetireSkuPrintingBlockConfigBody {
   /** @nullable */
   reason?: string | null;
 }
+
+export type PackagingCategory =
+  | "sachet_primary_bag"
+  | "inner_bag"
+  | "box_carton"
+  | "sticker_label"
+  | "oxygen_absorber"
+  | "desiccant"
+  | "shrink_wrap"
+  | "tray_insert"
+  | "printing_block"
+  | "other";
+
+export type PackagingUnit = "piece" | "roll" | "kg" | "meter";
+
+export interface PackagingSpecs {
+  /** @nullable */
+  material?: string | null;
+  /** @nullable */
+  widthMm?: number | null;
+  /** @nullable */
+  lengthMm?: number | null;
+  /** @nullable */
+  thicknessMicron?: number | null;
+  /** @nullable */
+  sealType?: string | null;
+  /** @nullable */
+  boxType?: string | null;
+  /** @nullable */
+  lengthCm?: number | null;
+  /** @nullable */
+  widthCm?: number | null;
+  /** @nullable */
+  heightCm?: number | null;
+  /** @nullable */
+  fullGrossWeightKg?: number | null;
+  /** @nullable */
+  stickerType?: string | null;
+  /** @nullable */
+  containsFdaInfo?: boolean | null;
+  /** @nullable */
+  capacityCc?: number | null;
+  /** @nullable */
+  unitsPerPurchasedPack?: number | null;
+  /** @nullable */
+  capacityG?: number | null;
+  /** @nullable */
+  rollWidthMm?: number | null;
+  /** @nullable */
+  heightMm?: number | null;
+  /** @nullable */
+  blockName?: string | null;
+  /** @nullable */
+  totalBlockCost?: number | null;
+  /** @nullable */
+  expectedPrintRuns?: number | null;
+  /** @nullable */
+  linkedPackagingItem?: string | null;
+  /** @nullable */
+  specDescription?: string | null;
+}
+
+export interface PackagingItem {
+  id: number;
+  nameEnglish: string;
+  /** @nullable */
+  nameThai?: string | null;
+  category: PackagingCategory;
+  /** @nullable */
+  supplier?: string | null;
+  unit: PackagingUnit;
+  unitCost: number;
+  /** @nullable */
+  moq?: number | null;
+  /** @nullable */
+  leadTimeDays?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  photoObjectPath?: string | null;
+  /** @nullable */
+  photoContentType?: string | null;
+  /** @nullable */
+  photoFileName?: string | null;
+  /** @nullable */
+  specs?: PackagingSpecs | null;
+  createdAt: string;
+}
+
+export interface CreatePackagingItemBody {
+  nameEnglish: string;
+  /** @nullable */
+  nameThai?: string | null;
+  category: PackagingCategory;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  unit?: PackagingUnit | null;
+  /** @nullable */
+  unitCost?: number | null;
+  /** @nullable */
+  moq?: number | null;
+  /** @nullable */
+  leadTimeDays?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  specs?: PackagingSpecs | null;
+}
+
+export interface UpdatePackagingItemBody {
+  /** @nullable */
+  nameEnglish?: string | null;
+  /** @nullable */
+  nameThai?: string | null;
+  /** @nullable */
+  category?: PackagingCategory | null;
+  /** @nullable */
+  supplier?: string | null;
+  /** @nullable */
+  unit?: PackagingUnit | null;
+  /** @nullable */
+  unitCost?: number | null;
+  /** @nullable */
+  moq?: number | null;
+  /** @nullable */
+  leadTimeDays?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  specs?: PackagingSpecs | null;
+}
