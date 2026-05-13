@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useGetIngredient,
   useGetIngredientPriceHistory,
@@ -19,6 +19,8 @@ import {
 } from "@workspace/api-client-react";
 import { SubCategoryCombobox } from "@/components/SubCategoryCombobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,6 +93,7 @@ export default function IngredientDetail({ id }: { id: string }) {
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [editingPriceId, setEditingPriceId] = useState<number | null>(null);
   const [deletingPriceId, setDeletingPriceId] = useState<number | null>(null);
+  const [skuPanelOpen, setSkuPanelOpen] = useState(false);
 
   const { data: ingredient, isLoading: loadingIng } = useGetIngredient(ingredientId, {
     query: { enabled: !isNaN(ingredientId) }
@@ -105,6 +108,23 @@ export default function IngredientDetail({ id }: { id: string }) {
   });
 
   const { data: subcategoryOptions = [] } = useListIngredientSubcategories();
+
+  type SkuExposureRow = {
+    id: number; skuCode: string; name: string | null; nameThai: string;
+    sellPrice: number; quantityPerUnit: number;
+    totalCogs: number | null; grossMargin: number | null;
+    marginStatus: "healthy" | "review" | "critical" | "unknown";
+  };
+
+  const { data: exposureSkus, isLoading: exposureLoading } = useQuery<SkuExposureRow[]>({
+    queryKey: ["ingredient-skus", ingredientId],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl(`/ingredients/${ingredientId}/skus`));
+      if (!r.ok) throw new Error("Failed to load SKUs");
+      return r.json();
+    },
+    enabled: skuPanelOpen && !isNaN(ingredientId),
+  });
 
   const updateIngredient = useUpdateIngredient();
   const updatePrice = useUpdateIngredientPrice();
@@ -372,13 +392,18 @@ export default function IngredientDetail({ id }: { id: string }) {
             <p className="text-xs text-muted-foreground mt-0.5">per {ingredient.unit} · effective {formatDate(ingredient.priceEffectiveDate)}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`transition-shadow ${ingredient.skuCount > 0 ? "cursor-pointer hover:shadow-md" : ""}`}
+          onClick={() => ingredient.skuCount > 0 && setSkuPanelOpen(true)}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">SKU Exposure</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{ingredient.skuCount}</div>
-            <p className="text-xs text-muted-foreground mt-0.5">SKUs using this item</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {ingredient.skuCount > 0 ? "SKUs using this — click to view →" : "No SKUs use this item yet"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -720,6 +745,81 @@ export default function IngredientDetail({ id }: { id: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── SKU EXPOSURE PANEL ── */}
+      <Sheet open={skuPanelOpen} onOpenChange={setSkuPanelOpen}>
+        <SheetContent className="sm:max-w-3xl w-full overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle>
+              SKUs using {ingredient.name}
+              {" "}
+              <span className="text-muted-foreground font-normal">({ingredient.skuCount})</span>
+            </SheetTitle>
+          </SheetHeader>
+
+          {exposureLoading ? (
+            <div className="space-y-2 pt-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : (exposureSkus?.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground pt-4">No SKUs found.</p>
+          ) : (
+            <div className="border rounded-md overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableHead className="pl-4 text-xs font-medium">SKU Code</TableHead>
+                    <TableHead className="text-xs font-medium">Name (Thai)</TableHead>
+                    <TableHead className="text-xs font-medium">Name (English)</TableHead>
+                    <TableHead className="text-right text-xs font-medium">Qty / unit</TableHead>
+                    <TableHead className="text-xs font-medium">Unit</TableHead>
+                    <TableHead className="text-right text-xs font-medium">COGS (฿)</TableHead>
+                    <TableHead className="text-right text-xs font-medium">Margin</TableHead>
+                    <TableHead className="text-xs font-medium">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {exposureSkus?.map(sku => {
+                    const statusColors: Record<string, string> = {
+                      healthy: "bg-green-100 text-green-800",
+                      review: "bg-amber-100 text-amber-800",
+                      critical: "bg-red-100 text-red-800",
+                      unknown: "bg-gray-100 text-gray-500",
+                    };
+                    const statusLabels: Record<string, string> = {
+                      healthy: "Healthy", review: "Review", critical: "Critical", unknown: "—",
+                    };
+                    return (
+                      <TableRow
+                        key={sku.id}
+                        className="cursor-pointer hover:bg-muted/50 group"
+                        onClick={() => { setSkuPanelOpen(false); setLocation(`/skus/${sku.id}`); }}
+                      >
+                        <TableCell className="pl-4 font-mono text-xs font-medium">{sku.skuCode}</TableCell>
+                        <TableCell className="text-sm">{sku.nameThai || "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{sku.name || "—"}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">{sku.quantityPerUnit.toLocaleString("en-US", { maximumFractionDigits: 4 })}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{ingredient.unit}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sm font-medium">
+                          {sku.totalCogs != null ? formatCurrency(sku.totalCogs) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {sku.grossMargin != null ? `${(sku.grossMargin * 100).toFixed(1)}%` : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={`text-[10px] px-1.5 py-0 font-medium border-0 ${statusColors[sku.marginStatus]}`}>
+                            {statusLabels[sku.marginStatus]}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog open={deletingPriceId !== null} onOpenChange={open => { if (!open) setDeletingPriceId(null); }}>
         <AlertDialogContent>

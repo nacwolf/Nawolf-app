@@ -77,6 +77,7 @@ export default function CostLibrary() {
 
   const [search, setSearch] = useState("");
   const [packagingCategoryFilter, setPackagingCategoryFilter] = useState<string>("all");
+  const [rawMaterialsSubCategoryFilter, setRawMaterialsSubCategoryFilter] = useState<string>("all");
   const [editTeamMember, setEditTeamMember] = useState<TeamMember | null>(null);
   const [addTeamOpen, setAddTeamOpen] = useState(false);
 
@@ -129,6 +130,18 @@ export default function CostLibrary() {
     const seen = new Set(packagingItems.map(i => i.category));
     return PACKAGING_CATEGORIES.filter(c => seen.has(c.value as string));
   }, [packagingItems]);
+
+  const rawMaterialsSubCategories = useMemo(() => {
+    if (!ingredients) return [];
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const item of ingredients) {
+      if (item.category !== "Raw Materials") continue;
+      const sub = item.subCategory?.trim();
+      if (sub && !seen.has(sub)) { seen.add(sub); result.push(sub); }
+    }
+    return result.sort();
+  }, [ingredients]);
 
   const filteredPackaging = useMemo(() => {
     let items = packagingItems ?? [];
@@ -411,13 +424,16 @@ export default function CostLibrary() {
         ) : (
           <div className="space-y-4">
             {INGREDIENT_CATEGORIES.map(cat => {
-              const items = (filteredIngredients || []).filter(i => i.category === cat);
+              const allCatItems = (filteredIngredients || []).filter(i => i.category === cat);
+              const items = cat === "Raw Materials" && rawMaterialsSubCategoryFilter !== "all"
+                ? allCatItems.filter(i => i.subCategory === rawMaterialsSubCategoryFilter)
+                : allCatItems;
               return (
                 <Card key={cat} className={`border-l-4 ${CATEGORY_BORDER[cat]} overflow-hidden`}>
                   <div className={`px-6 py-3 ${CATEGORY_HEADER_BG[cat]} flex items-center justify-between gap-3`}>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs font-bold uppercase tracking-wider ${CATEGORY_TEXT[cat]}`}>{cat}</span>
-                      {items.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{items.length}</Badge>}
+                      {allCatItems.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{allCatItems.length}</Badge>}
                     </div>
                     <button
                       onClick={() => setLocation(`/ingredients/new?category=${encodeURIComponent(cat)}`)}
@@ -427,10 +443,40 @@ export default function CostLibrary() {
                     </button>
                   </div>
 
+                  {cat === "Raw Materials" && rawMaterialsSubCategories.length > 1 && (
+                    <div className="px-6 py-2 border-b flex flex-wrap gap-1.5 bg-green-50/40">
+                      <button
+                        onClick={() => setRawMaterialsSubCategoryFilter("all")}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          rawMaterialsSubCategoryFilter === "all"
+                            ? "bg-green-600 text-white border-green-600"
+                            : "text-green-700 border-green-200 hover:border-green-400 bg-white"
+                        }`}
+                      >
+                        All
+                      </button>
+                      {rawMaterialsSubCategories.map(sub => (
+                        <button
+                          key={sub}
+                          onClick={() => setRawMaterialsSubCategoryFilter(sub)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            rawMaterialsSubCategoryFilter === sub
+                              ? "bg-green-600 text-white border-green-600"
+                              : "text-green-700 border-green-200 hover:border-green-400 bg-white"
+                          }`}
+                        >
+                          {sub}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {items.length === 0 ? (
                     <div className="py-6 text-center text-muted-foreground text-sm">
-                      No {cat.toLowerCase()} items yet.{" "}
-                      <button onClick={() => setLocation(`/ingredients/new?category=${encodeURIComponent(cat)}`)} className="text-primary hover:underline">Add one →</button>
+                      {cat === "Raw Materials" && rawMaterialsSubCategoryFilter !== "all"
+                        ? "No items match the current filter."
+                        : <>{`No ${cat.toLowerCase()} items yet.`}{" "}<button onClick={() => setLocation(`/ingredients/new?category=${encodeURIComponent(cat)}`)} className="text-primary hover:underline">Add one →</button></>
+                      }
                     </div>
                   ) : (
                     <Table>

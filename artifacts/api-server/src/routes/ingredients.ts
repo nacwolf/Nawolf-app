@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray, sum } from "drizzle-orm";
 import {
   db,
   ingredientsTable,
   ingredientPricesTable,
   costLinesTable,
   skusTable,
+  skuSnapshotsTable,
   ingredientAttachmentsTable,
   ingredientTierPriceHistoryTable,
 } from "@workspace/db";
@@ -19,7 +20,7 @@ import {
   EditIngredientPriceBody,
   DeleteIngredientPriceParams,
 } from "@workspace/api-zod";
-import { getCurrentPrice, recalculateAllSkusUsingIngredient } from "../lib/kostr";
+import { getCurrentPrice, recalculateAllSkusUsingIngredient, computeMarginStatus } from "../lib/kostr";
 import { getAuth } from "@clerk/express";
 
 const router: IRouter = Router();
@@ -206,12 +207,59 @@ router.get("/ingredients/:id/skus", requireAuth, async (req, res): Promise<void>
   }
 
   const rows = await db
-    .selectDistinct({ id: skusTable.id, name: skusTable.name, skuCode: skusTable.skuCode })
+    .select({
+      id: skusTable.id,
+      skuCode: skusTable.skuCode,
+      name: skusTable.name,
+      nameThai: skusTable.nameThai,
+      sellPrice: skusTable.sellPrice,
+      quantityPerUnit: sum(costLinesTable.quantityPerUnit),
+    })
     .from(costLinesTable)
     .innerJoin(skusTable, eq(costLinesTable.skuId, skusTable.id))
-    .where(eq(costLinesTable.ingredientId, id));
+    .where(eq(costLinesTable.ingredientId, id))
+    .groupBy(skusTable.id, skusTable.skuCode, skusTable.name, skusTable.nameThai, skusTable.sellPrice);
 
-  res.json(rows);
+  const skuIds = rows.map(r => r.id);
+  const snapshotMap = new Map<number, { totalCogs: number | null; grossMargin: number | null }>();
+
+  if (skuIds.length > 0) {
+    const snapshots = await db
+      .select({
+        skuId: skuSnapshotsTable.skuId,
+        totalCogs: skuSnapshotsTable.totalCogs,
+        grossMargin: skuSnapshotsTable.grossMargin,
+      })
+      .from(skuSnapshotsTable)
+      .where(inArray(skuSnapshotsTable.skuId, skuIds))
+      .orderBy(desc(skuSnapshotsTable.snapshotDate), desc(skuSnapshotsTable.createdAt));
+
+    for (const snap of snapshots) {
+      if (!snapshotMap.has(snap.skuId)) {
+        snapshotMap.set(snap.skuId, {
+          totalCogs: parseFloat(snap.totalCogs),
+          grossMargin: parseFloat(snap.grossMargin),
+        });
+      }
+    }
+  }
+
+  const result = rows.map(row => {
+    const snap = snapshotMap.get(row.id) ?? { totalCogs: null, grossMargin: null };
+    return {
+      id: row.id,
+      skuCode: row.skuCode,
+      name: row.name,
+      nameThai: row.nameThai,
+      sellPrice: parseFloat(row.sellPrice),
+      quantityPerUnit: parseFloat(row.quantityPerUnit ?? "0"),
+      totalCogs: snap.totalCogs,
+      grossMargin: snap.grossMargin,
+      marginStatus: computeMarginStatus(snap.grossMargin),
+    };
+  });
+
+  res.json(result);
 });
 
 router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> => {
