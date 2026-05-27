@@ -585,6 +585,12 @@ export interface PackagingSpecs {
   /** @nullable */
   sealType?: string | null;
   /** @nullable */
+  bagType?: string | null;
+  /** @nullable */
+  buttSealMm?: number | null;
+  /** @nullable */
+  sideSealMm?: number | null;
+  /** @nullable */
   boxType?: string | null;
   /** @nullable */
   lengthCm?: number | null;
@@ -642,6 +648,18 @@ export interface PackagingItem {
   photoContentType?: string | null;
   /** @nullable */
   photoFileName?: string | null;
+  /** @nullable */
+  quotationObjectPath?: string | null;
+  /** @nullable */
+  quotationContentType?: string | null;
+  /** @nullable */
+  quotationFileName?: string | null;
+  /** @nullable */
+  specDocObjectPath?: string | null;
+  /** @nullable */
+  specDocContentType?: string | null;
+  /** @nullable */
+  specDocFileName?: string | null;
   /** @nullable */
   specs?: PackagingSpecs | null;
   createdAt: string;

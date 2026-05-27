@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Upload, X, Image } from "lucide-react";
+import { ArrowLeft, Loader2, X, Image, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,16 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 import { PACKAGING_CATEGORIES } from "../packaging";
+
+const BAG_TYPE_OPTIONS = [
+  { value: "pouch_stand_up", label: "Pouch (Stand-Up)" },
+  { value: "pillow_bag", label: "Pillow Bag" },
+  { value: "flat_bottom_pouch", label: "Flat-Bottom Pouch" },
+  { value: "gusseted_bag", label: "Gusseted Bag" },
+  { value: "quad_seal_bag", label: "Quad-Seal Bag" },
+  { value: "doyen_bag", label: "Doyen Bag" },
+  { value: "other", label: "Other" },
+];
 
 const formSchema = z.object({
   nameEnglish: z.string().min(1, "Item Name (English) is required"),
@@ -31,7 +41,9 @@ const formSchema = z.object({
   specWidthMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specLengthMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specThicknessMicron: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
-  specSealType: z.string().optional(),
+  specBagType: z.string().optional(),
+  specButtSealMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
+  specSideSealMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specBoxType: z.string().optional(),
   specLengthCm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specWidthCm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
@@ -62,7 +74,7 @@ function buildSpecs(data: FormData) {
   if (["sachet_primary_bag", "inner_bag", "box_carton", "sticker_label", "shrink_wrap", "tray_insert"].includes(cat)) set("material", data.specMaterial);
   if (["sachet_primary_bag", "inner_bag", "sticker_label", "tray_insert"].includes(cat)) { set("widthMm", data.specWidthMm); set("lengthMm", data.specLengthMm); }
   if (["sachet_primary_bag", "inner_bag", "shrink_wrap"].includes(cat)) set("thicknessMicron", data.specThicknessMicron);
-  if (cat === "sachet_primary_bag") set("sealType", data.specSealType);
+  if (cat === "sachet_primary_bag") { set("bagType", data.specBagType); set("buttSealMm", data.specButtSealMm); set("sideSealMm", data.specSideSealMm); }
   if (cat === "box_carton") { set("boxType", data.specBoxType); set("lengthCm", data.specLengthCm); set("widthCm", data.specWidthCm); set("heightCm", data.specHeightCm); set("fullGrossWeightKg", data.specFullGrossWeightKg); }
   if (cat === "sticker_label") { set("stickerType", data.specStickerType); if (data.specContainsFdaInfo !== undefined) specs["containsFdaInfo"] = data.specContainsFdaInfo; }
   if (cat === "oxygen_absorber") { set("capacityCc", data.specCapacityCc); set("unitsPerPurchasedPack", data.specUnitsPerPurchasedPack); }
@@ -75,6 +87,17 @@ function buildSpecs(data: FormData) {
   return Object.keys(specs).length > 0 ? specs : null;
 }
 
+async function uploadFileToStorage(file: File): Promise<{ objectPath: string; contentType: string; fileName: string }> {
+  const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+  });
+  const { uploadURL, objectPath } = await urlRes.json();
+  await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+  return { objectPath, contentType: file.type, fileName: file.name };
+}
+
 export default function NewPackagingItem() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -82,6 +105,8 @@ export default function NewPackagingItem() {
   const [isSaving, setIsSaving] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [quotationFile, setQuotationFile] = useState<File | null>(null);
+  const [specDocFile, setSpecDocFile] = useState<File | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -139,20 +164,40 @@ export default function NewPackagingItem() {
 
       if (photoFile) {
         try {
-          const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: photoFile.name, size: photoFile.size, contentType: photoFile.type }),
-          });
-          const { uploadURL, objectPath } = await urlRes.json();
-          await fetch(uploadURL, { method: "PUT", body: photoFile, headers: { "Content-Type": photoFile.type } });
+          const ref = await uploadFileToStorage(photoFile);
           await fetch(getApiUrl(`/packaging/${created.id}/photo`), {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ objectPath, contentType: photoFile.type, fileName: photoFile.name }),
+            body: JSON.stringify(ref),
           });
         } catch {
           toast({ variant: "destructive", title: "Item saved but photo upload failed" });
+        }
+      }
+
+      if (quotationFile) {
+        try {
+          const ref = await uploadFileToStorage(quotationFile);
+          await fetch(getApiUrl(`/packaging/${created.id}/quotation`), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ref),
+          });
+        } catch {
+          toast({ variant: "destructive", title: "Item saved but quotation upload failed" });
+        }
+      }
+
+      if (specDocFile) {
+        try {
+          const ref = await uploadFileToStorage(specDocFile);
+          await fetch(getApiUrl(`/packaging/${created.id}/spec-doc`), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ref),
+          });
+        } catch {
+          toast({ variant: "destructive", title: "Item saved but spec doc upload failed" });
         }
       }
 
@@ -165,6 +210,8 @@ export default function NewPackagingItem() {
       setIsSaving(false);
     }
   }
+
+  const isSachet = category === "sachet_primary_bag";
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -279,33 +326,112 @@ export default function NewPackagingItem() {
             </Card>
           )}
 
-          {/* Photo Upload */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">Photo</CardTitle></CardHeader>
-            <CardContent>
-              {photoPreview ? (
-                <div className="relative inline-block">
-                  <img src={photoPreview} alt="Preview" className="w-40 h-40 object-cover rounded-lg border" />
-                  <Button
-                    type="button" variant="destructive" size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                    onClick={() => handlePhotoChange(null)}
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
+          {/* Documents & Media (sachet only) or generic Photo card */}
+          {isSachet ? (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Documents & Media</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                {/* Product Photo */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Product Photo</p>
+                  {photoPreview ? (
+                    <div className="relative inline-block">
+                      <img src={photoPreview} alt="Preview" className="w-40 h-40 object-cover rounded-lg border" />
+                      <Button
+                        type="button" variant="destructive" size="icon"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                        onClick={() => handlePhotoChange(null)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                      <Image className="w-6 h-6 text-muted-foreground mb-2" />
+                      <span className="text-xs text-muted-foreground text-center">Upload photo<br/>JPG or PNG</span>
+                      <input
+                        type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
+                        onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
                 </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
-                  <Image className="w-6 h-6 text-muted-foreground mb-2" />
-                  <span className="text-xs text-muted-foreground text-center">Upload photo<br/>JPG or PNG</span>
-                  <input
-                    type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
-                    onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
-            </CardContent>
-          </Card>
+
+                {/* Supplier Quotation */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Supplier Quotation</p>
+                  {quotationFile ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/40">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{quotationFile.name}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setQuotationFile(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-3 p-3 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Upload PDF or document</span>
+                      <input
+                        type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden"
+                        onChange={e => setQuotationFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Spec Document */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Spec Document</p>
+                  {specDocFile ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/40">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{specDocFile.name}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSpecDocFile(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-3 p-3 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Upload PDF or document</span>
+                      <input
+                        type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden"
+                        onChange={e => setSpecDocFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Photo</CardTitle></CardHeader>
+              <CardContent>
+                {photoPreview ? (
+                  <div className="relative inline-block">
+                    <img src={photoPreview} alt="Preview" className="w-40 h-40 object-cover rounded-lg border" />
+                    <Button
+                      type="button" variant="destructive" size="icon"
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                      onClick={() => handlePhotoChange(null)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                    <Image className="w-6 h-6 text-muted-foreground mb-2" />
+                    <span className="text-xs text-muted-foreground text-center">Upload photo<br/>JPG or PNG</span>
+                    <input
+                      type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
+                      onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="flex gap-3">
             <Button type="submit" disabled={isSaving}>
@@ -356,11 +482,13 @@ function CategorySpecFields({ form, category, costPerRun }: { form: ReturnType<t
 
   if (category === "sachet_primary_bag") return (
     <div className="grid gap-4 md:grid-cols-2">
+      {selectField("specBagType", "Bag Type", BAG_TYPE_OPTIONS)}
       {txtField("specMaterial", "Material", "e.g. BOPP, PET, Kraft")}
       {numField("specWidthMm", "Width (mm)")}
       {numField("specLengthMm", "Length (mm)")}
+      {numField("specButtSealMm", "Butt Seal (mm)")}
+      {numField("specSideSealMm", "Side Seal (mm)")}
       {numField("specThicknessMicron", "Thickness (micron)")}
-      {txtField("specSealType", "Seal Type", "e.g. 3-side seal, pillow bag")}
     </div>
   );
 

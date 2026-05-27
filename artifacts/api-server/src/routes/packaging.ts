@@ -143,6 +143,76 @@ router.delete("/packaging/:id", requireAuth, async (req, res): Promise<void> => 
   }
 });
 
+router.patch("/packaging/:id/quotation", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { objectPath, contentType, fileName } = req.body;
+  if (!objectPath) { res.status(400).json({ error: "objectPath is required" }); return; }
+
+  const [existing] = await db.select().from(packagingItemsTable).where(eq(packagingItemsTable.id, id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [updated] = await db.update(packagingItemsTable).set({
+    quotationObjectPath: objectPath,
+    quotationContentType: contentType || null,
+    quotationFileName: fileName || null,
+  }).where(eq(packagingItemsTable.id, id)).returning();
+
+  res.json(parseItem(updated));
+});
+
+router.delete("/packaging/:id/quotation", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db.select().from(packagingItemsTable).where(eq(packagingItemsTable.id, id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [updated] = await db.update(packagingItemsTable).set({
+    quotationObjectPath: null,
+    quotationContentType: null,
+    quotationFileName: null,
+  }).where(eq(packagingItemsTable.id, id)).returning();
+
+  res.json(parseItem(updated));
+});
+
+router.patch("/packaging/:id/spec-doc", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { objectPath, contentType, fileName } = req.body;
+  if (!objectPath) { res.status(400).json({ error: "objectPath is required" }); return; }
+
+  const [existing] = await db.select().from(packagingItemsTable).where(eq(packagingItemsTable.id, id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [updated] = await db.update(packagingItemsTable).set({
+    specDocObjectPath: objectPath,
+    specDocContentType: contentType || null,
+    specDocFileName: fileName || null,
+  }).where(eq(packagingItemsTable.id, id)).returning();
+
+  res.json(parseItem(updated));
+});
+
+router.delete("/packaging/:id/spec-doc", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db.select().from(packagingItemsTable).where(eq(packagingItemsTable.id, id)).limit(1);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+  const [updated] = await db.update(packagingItemsTable).set({
+    specDocObjectPath: null,
+    specDocContentType: null,
+    specDocFileName: null,
+  }).where(eq(packagingItemsTable.id, id)).returning();
+
+  res.json(parseItem(updated));
+});
+
 router.patch("/packaging/:id/photo", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

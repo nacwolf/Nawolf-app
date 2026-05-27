@@ -29,6 +29,12 @@ export const packagingItemsTable = pgTable("packaging_items", {
   photoObjectPath: text("photo_object_path"),
   photoContentType: text("photo_content_type"),
   photoFileName: text("photo_file_name"),
+  quotationObjectPath: text("quotation_object_path"),
+  quotationContentType: text("quotation_content_type"),
+  quotationFileName: text("quotation_file_name"),
+  specDocObjectPath: text("spec_doc_object_path"),
+  specDocContentType: text("spec_doc_content_type"),
+  specDocFileName: text("spec_doc_file_name"),
   specs: jsonb("specs"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

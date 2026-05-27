@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Trash2, X, Image, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, X, Image, Save, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,16 @@ import { formatDate } from "@/lib/format";
 import type { PackagingItem, PackagingSpecs } from "@workspace/api-client-react";
 import { PACKAGING_CATEGORIES, categoryLabel } from "../packaging";
 
+const BAG_TYPE_OPTIONS = [
+  { value: "pouch_stand_up", label: "Pouch (Stand-Up)" },
+  { value: "pillow_bag", label: "Pillow Bag" },
+  { value: "flat_bottom_pouch", label: "Flat-Bottom Pouch" },
+  { value: "gusseted_bag", label: "Gusseted Bag" },
+  { value: "quad_seal_bag", label: "Quad-Seal Bag" },
+  { value: "doyen_bag", label: "Doyen Bag" },
+  { value: "other", label: "Other" },
+];
+
 const formSchema = z.object({
   nameEnglish: z.string().min(1, "Item Name (English) is required"),
   nameThai: z.string().optional(),
@@ -34,7 +44,9 @@ const formSchema = z.object({
   specWidthMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specLengthMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specThicknessMicron: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
-  specSealType: z.string().optional(),
+  specBagType: z.string().optional(),
+  specButtSealMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
+  specSideSealMm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specBoxType: z.string().optional(),
   specLengthCm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
   specWidthCm: z.coerce.number().positive().optional().or(z.literal("").transform(() => undefined)),
@@ -63,7 +75,9 @@ function specsToFormData(specs: PackagingSpecs | null | undefined): Partial<Form
     specWidthMm: specs.widthMm ?? undefined,
     specLengthMm: specs.lengthMm ?? undefined,
     specThicknessMicron: specs.thicknessMicron ?? undefined,
-    specSealType: (specs.sealType as string) ?? undefined,
+    specBagType: (specs.bagType as string) ?? undefined,
+    specButtSealMm: (specs.buttSealMm as number) ?? undefined,
+    specSideSealMm: (specs.sideSealMm as number) ?? undefined,
     specBoxType: (specs.boxType as string) ?? undefined,
     specLengthCm: specs.lengthCm ?? undefined,
     specWidthCm: specs.widthCm ?? undefined,
@@ -91,7 +105,7 @@ function buildSpecs(data: FormData, category: string): Record<string, unknown> |
   if (["sachet_primary_bag", "inner_bag", "box_carton", "sticker_label", "shrink_wrap", "tray_insert"].includes(category)) set("material", data.specMaterial);
   if (["sachet_primary_bag", "inner_bag", "sticker_label", "tray_insert"].includes(category)) { set("widthMm", data.specWidthMm); set("lengthMm", data.specLengthMm); }
   if (["sachet_primary_bag", "inner_bag", "shrink_wrap"].includes(category)) set("thicknessMicron", data.specThicknessMicron);
-  if (category === "sachet_primary_bag") set("sealType", data.specSealType);
+  if (category === "sachet_primary_bag") { set("bagType", data.specBagType); set("buttSealMm", data.specButtSealMm); set("sideSealMm", data.specSideSealMm); }
   if (category === "box_carton") { set("boxType", data.specBoxType); set("lengthCm", data.specLengthCm); set("widthCm", data.specWidthCm); set("heightCm", data.specHeightCm); set("fullGrossWeightKg", data.specFullGrossWeightKg); }
   if (category === "sticker_label") { set("stickerType", data.specStickerType); if (data.specContainsFdaInfo !== undefined) specs["containsFdaInfo"] = data.specContainsFdaInfo; }
   if (category === "oxygen_absorber") { set("capacityCc", data.specCapacityCc); set("unitsPerPurchasedPack", data.specUnitsPerPurchasedPack); }
@@ -102,6 +116,17 @@ function buildSpecs(data: FormData, category: string): Record<string, unknown> |
   if (category === "other") set("specDescription", data.specDescription);
 
   return Object.keys(specs).length > 0 ? specs : null;
+}
+
+async function uploadFileToStorage(file: File): Promise<{ objectPath: string; contentType: string; fileName: string }> {
+  const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+  });
+  const { uploadURL, objectPath } = await urlRes.json();
+  await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+  return { objectPath, contentType: file.type, fileName: file.name };
 }
 
 export default function PackagingDetail({ id }: { id: string }) {
@@ -116,6 +141,10 @@ export default function PackagingDetail({ id }: { id: string }) {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [removingPhoto, setRemovingPhoto] = useState(false);
+  const [quotationFile, setQuotationFile] = useState<File | null>(null);
+  const [removingQuotation, setRemovingQuotation] = useState(false);
+  const [specDocFile, setSpecDocFile] = useState<File | null>(null);
+  const [removingSpecDoc, setRemovingSpecDoc] = useState(false);
 
   const { data: item, isLoading } = useQuery<PackagingItem>({
     queryKey: ["/api/packaging", itemId],
@@ -161,18 +190,12 @@ export default function PackagingDetail({ id }: { id: string }) {
     else setPhotoPreview(null);
   }
 
-  async function uploadPhoto(itemId: number, file: File) {
-    const urlRes = await fetch(getApiUrl("/storage/uploads/request-url"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-    });
-    const { uploadURL, objectPath } = await urlRes.json();
-    await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-    await fetch(getApiUrl(`/packaging/${itemId}/photo`), {
+  async function uploadPhoto(id: number, file: File) {
+    const ref = await uploadFileToStorage(file);
+    await fetch(getApiUrl(`/packaging/${id}/photo`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ objectPath, contentType: file.type, fileName: file.name }),
+      body: JSON.stringify(ref),
     });
   }
 
@@ -187,6 +210,32 @@ export default function PackagingDetail({ id }: { id: string }) {
       toast({ variant: "destructive", title: "Failed to remove photo" });
     } finally {
       setRemovingPhoto(false);
+    }
+  }
+
+  async function handleRemoveQuotation() {
+    setRemovingQuotation(true);
+    try {
+      await fetch(getApiUrl(`/packaging/${itemId}/quotation`), { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["/api/packaging", itemId] });
+      toast({ title: "Quotation removed" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to remove quotation" });
+    } finally {
+      setRemovingQuotation(false);
+    }
+  }
+
+  async function handleRemoveSpecDoc() {
+    setRemovingSpecDoc(true);
+    try {
+      await fetch(getApiUrl(`/packaging/${itemId}/spec-doc`), { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["/api/packaging", itemId] });
+      toast({ title: "Spec document removed" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to remove spec document" });
+    } finally {
+      setRemovingSpecDoc(false);
     }
   }
 
@@ -220,6 +269,34 @@ export default function PackagingDetail({ id }: { id: string }) {
           setPhotoPreview(null);
         } catch {
           toast({ variant: "destructive", title: "Saved but photo upload failed" });
+        }
+      }
+
+      if (quotationFile) {
+        try {
+          const ref = await uploadFileToStorage(quotationFile);
+          await fetch(getApiUrl(`/packaging/${itemId}/quotation`), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ref),
+          });
+          setQuotationFile(null);
+        } catch {
+          toast({ variant: "destructive", title: "Saved but quotation upload failed" });
+        }
+      }
+
+      if (specDocFile) {
+        try {
+          const ref = await uploadFileToStorage(specDocFile);
+          await fetch(getApiUrl(`/packaging/${itemId}/spec-doc`), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ref),
+          });
+          setSpecDocFile(null);
+        } catch {
+          toast({ variant: "destructive", title: "Saved but spec doc upload failed" });
         }
       }
 
@@ -263,6 +340,9 @@ export default function PackagingDetail({ id }: { id: string }) {
   );
 
   const currentPhotoUrl = item.photoObjectPath ? getApiUrl(`/storage/objects${item.photoObjectPath.replace(/^\/objects/, "")}`) : null;
+  const currentQuotationUrl = (item as any).quotationObjectPath ? getApiUrl(`/storage/objects${(item as any).quotationObjectPath.replace(/^\/objects/, "")}`) : null;
+  const currentSpecDocUrl = (item as any).specDocObjectPath ? getApiUrl(`/storage/objects${(item as any).specDocObjectPath.replace(/^\/objects/, "")}`) : null;
+  const isSachet = item.category === "sachet_primary_bag";
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -379,49 +459,190 @@ export default function PackagingDetail({ id }: { id: string }) {
             </Card>
           )}
 
-          {/* Photo */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">Photo</CardTitle></CardHeader>
-            <CardContent className="flex gap-4 flex-wrap">
-              {/* Existing photo */}
-              {currentPhotoUrl && !photoPreview && (
-                <div className="relative inline-block">
-                  <img src={currentPhotoUrl} alt="Product" className="w-40 h-40 object-cover rounded-lg border" />
-                  <Button
-                    type="button" variant="destructive" size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                    onClick={handleRemovePhoto} disabled={removingPhoto}
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
+          {/* Documents & Media (sachet only) or generic Photo card */}
+          {isSachet ? (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Documents & Media</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                {/* Product Photo */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Product Photo</p>
+                  <div className="flex gap-4 flex-wrap">
+                    {currentPhotoUrl && !photoPreview && (
+                      <div className="relative inline-block">
+                        <img src={currentPhotoUrl} alt="Product" className="w-40 h-40 object-cover rounded-lg border" />
+                        <Button
+                          type="button" variant="destructive" size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                          onClick={handleRemovePhoto} disabled={removingPhoto}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
+                    {photoPreview && (
+                      <div className="relative inline-block">
+                        <img src={photoPreview} alt="New photo preview" className="w-40 h-40 object-cover rounded-lg border border-primary" />
+                        <Button
+                          type="button" variant="destructive" size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                          onClick={() => handlePhotoChange(null)}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    )}
+                    {!photoPreview && (
+                      <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                        <Image className="w-6 h-6 text-muted-foreground mb-2" />
+                        <span className="text-xs text-muted-foreground text-center">{currentPhotoUrl ? "Replace photo" : "Upload photo"}<br/>JPG or PNG</span>
+                        <input
+                          type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
+                          onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
-              )}
-              {/* New photo preview */}
-              {photoPreview && (
-                <div className="relative inline-block">
-                  <img src={photoPreview} alt="New photo preview" className="w-40 h-40 object-cover rounded-lg border border-primary" />
-                  <Button
-                    type="button" variant="destructive" size="icon"
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                    onClick={() => handlePhotoChange(null)}
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
+
+                {/* Supplier Quotation */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Supplier Quotation</p>
+                  {quotationFile ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/40">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{quotationFile.name}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setQuotationFile(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : currentQuotationUrl ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/40">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{(item as any).quotationFileName ?? "Quotation"}</span>
+                      <a href={currentQuotationUrl} target="_blank" rel="noopener noreferrer">
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                          <Download className="w-3 h-3" />
+                        </Button>
+                      </a>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive hover:text-destructive" onClick={handleRemoveQuotation} disabled={removingQuotation}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-3 p-3 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Upload PDF or document</span>
+                      <input
+                        type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden"
+                        onChange={e => setQuotationFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
+                  {currentQuotationUrl && !quotationFile && (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <input
+                        type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden"
+                        onChange={e => setQuotationFile(e.target.files?.[0] ?? null)}
+                      />
+                      Replace file
+                    </label>
+                  )}
+                  {quotationFile && currentQuotationUrl && (
+                    <p className="text-xs text-muted-foreground">Will replace existing file on save</p>
+                  )}
                 </div>
-              )}
-              {/* Upload button */}
-              {!photoPreview && (
-                <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
-                  <Image className="w-6 h-6 text-muted-foreground mb-2" />
-                  <span className="text-xs text-muted-foreground text-center">{currentPhotoUrl ? "Replace photo" : "Upload photo"}<br/>JPG or PNG</span>
-                  <input
-                    type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
-                    onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
-            </CardContent>
-          </Card>
+
+                {/* Spec Document */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Spec Document</p>
+                  {specDocFile ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/40">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{specDocFile.name}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSpecDocFile(null)}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : currentSpecDocUrl ? (
+                    <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/40">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate flex-1">{(item as any).specDocFileName ?? "Spec Document"}</span>
+                      <a href={currentSpecDocUrl} target="_blank" rel="noopener noreferrer">
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                          <Download className="w-3 h-3" />
+                        </Button>
+                      </a>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive hover:text-destructive" onClick={handleRemoveSpecDoc} disabled={removingSpecDoc}>
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-3 p-3 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Upload PDF or document</span>
+                      <input
+                        type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden"
+                        onChange={e => setSpecDocFile(e.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                  )}
+                  {currentSpecDocUrl && !specDocFile && (
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <input
+                        type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden"
+                        onChange={e => setSpecDocFile(e.target.files?.[0] ?? null)}
+                      />
+                      Replace file
+                    </label>
+                  )}
+                  {specDocFile && currentSpecDocUrl && (
+                    <p className="text-xs text-muted-foreground">Will replace existing file on save</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Photo</CardTitle></CardHeader>
+              <CardContent className="flex gap-4 flex-wrap">
+                {currentPhotoUrl && !photoPreview && (
+                  <div className="relative inline-block">
+                    <img src={currentPhotoUrl} alt="Product" className="w-40 h-40 object-cover rounded-lg border" />
+                    <Button
+                      type="button" variant="destructive" size="icon"
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                      onClick={handleRemovePhoto} disabled={removingPhoto}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
+                {photoPreview && (
+                  <div className="relative inline-block">
+                    <img src={photoPreview} alt="New photo preview" className="w-40 h-40 object-cover rounded-lg border border-primary" />
+                    <Button
+                      type="button" variant="destructive" size="icon"
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                      onClick={() => handlePhotoChange(null)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
+                {!photoPreview && (
+                  <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
+                    <Image className="w-6 h-6 text-muted-foreground mb-2" />
+                    <span className="text-xs text-muted-foreground text-center">{currentPhotoUrl ? "Replace photo" : "Upload photo"}<br/>JPG or PNG</span>
+                    <input
+                      type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
+                      onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="flex gap-3">
             <Button type="submit" disabled={isSaving}>
@@ -490,11 +711,13 @@ function CategorySpecFields({ form, category, costPerRun }: { form: ReturnType<t
 
   if (category === "sachet_primary_bag") return (
     <div className="grid gap-4 md:grid-cols-2">
+      {selectField("specBagType", "Bag Type", BAG_TYPE_OPTIONS)}
       {txtField("specMaterial", "Material")}
       {numField("specWidthMm", "Width (mm)")}
       {numField("specLengthMm", "Length (mm)")}
+      {numField("specButtSealMm", "Butt Seal (mm)")}
+      {numField("specSideSealMm", "Side Seal (mm)")}
       {numField("specThicknessMicron", "Thickness (micron)")}
-      {txtField("specSealType", "Seal Type")}
     </div>
   );
 
