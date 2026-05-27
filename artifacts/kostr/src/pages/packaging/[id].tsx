@@ -343,6 +343,7 @@ export default function PackagingDetail({ id }: { id: string }) {
   const currentQuotationUrl = (item as any).quotationObjectPath ? getApiUrl(`/storage/objects${(item as any).quotationObjectPath.replace(/^\/objects/, "")}`) : null;
   const currentSpecDocUrl = (item as any).specDocObjectPath ? getApiUrl(`/storage/objects${(item as any).specDocObjectPath.replace(/^\/objects/, "")}`) : null;
   const isSachet = item.category === "sachet_primary_bag";
+  const showDocuments = true;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -482,8 +483,8 @@ export default function PackagingDetail({ id }: { id: string }) {
             </Card>
           )}
 
-          {/* Documents & Media (sachet only) or generic Photo card */}
-          {isSachet ? (
+          {/* Documents & Media */}
+          {showDocuments ? (
             <Card>
               <CardHeader><CardTitle className="text-base">Documents & Media</CardTitle></CardHeader>
               <CardContent className="space-y-6">

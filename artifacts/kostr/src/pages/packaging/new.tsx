@@ -211,7 +211,7 @@ export default function NewPackagingItem() {
     }
   }
 
-  const isSachet = category === "sachet_primary_bag";
+  const showDocuments = !!category;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -326,8 +326,8 @@ export default function NewPackagingItem() {
             </Card>
           )}
 
-          {/* Documents & Media (sachet only) or generic Photo card */}
-          {isSachet ? (
+          {/* Documents & Media */}
+          {showDocuments ? (
             <Card>
               <CardHeader><CardTitle className="text-base">Documents & Media</CardTitle></CardHeader>
               <CardContent className="space-y-6">
