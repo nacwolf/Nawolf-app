@@ -29,6 +29,20 @@ export function categoryLabel(value: string): string {
   return PACKAGING_CATEGORIES.find(c => c.value === value)?.label ?? value;
 }
 
+const BAG_TYPE_LABELS: Record<string, string> = {
+  pouch_stand_up: "Pouch (Stand-Up)",
+  pillow_bag: "Pillow Bag",
+  flat_bottom_pouch: "Flat-Bottom Pouch",
+  gusseted_bag: "Gusseted Bag",
+  quad_seal_bag: "Quad-Seal Bag",
+  doyen_bag: "Doyen Bag",
+  other: "Other",
+};
+
+export function bagTypeLabel(value: string): string {
+  return BAG_TYPE_LABELS[value] ?? value;
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   sachet_primary_bag: "bg-purple-100 text-purple-800",
   inner_bag: "bg-violet-100 text-violet-800",
@@ -168,6 +182,11 @@ export default function PackagingList() {
                     <TableCell>
                       <div className="font-medium">{item.nameEnglish}</div>
                       {item.nameThai && <div className="text-xs text-muted-foreground">{item.nameThai}</div>}
+                      {item.category === "sachet_primary_bag" && (item.specs as any)?.bagType && (
+                        <Badge variant="secondary" className="mt-1 text-xs bg-indigo-50 text-indigo-700 border-indigo-100">
+                          {bagTypeLabel((item.specs as any).bagType)}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={CATEGORY_COLORS[item.category]}>

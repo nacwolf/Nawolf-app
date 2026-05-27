@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/queryClient";
 import { formatDate } from "@/lib/format";
 import type { PackagingItem, PackagingSpecs } from "@workspace/api-client-react";
-import { PACKAGING_CATEGORIES, categoryLabel } from "../packaging";
+import { PACKAGING_CATEGORIES, categoryLabel, bagTypeLabel } from "../packaging";
 
 const BAG_TYPE_OPTIONS = [
   { value: "pouch_stand_up", label: "Pouch (Stand-Up)" },
@@ -360,6 +360,29 @@ export default function PackagingDetail({ id }: { id: string }) {
           <Trash2 className="w-4 h-4 mr-1" /> Delete
         </Button>
       </div>
+
+      {isSachet && item.specs && ((item.specs as any).bagType || (item.specs as any).buttSealMm != null || (item.specs as any).sideSealMm != null) && (
+        <div className="flex flex-wrap gap-2">
+          {(item.specs as any).bagType && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-100">
+              <span className="text-xs text-muted-foreground">Bag Type</span>
+              <span className="text-sm font-medium text-purple-800">{bagTypeLabel((item.specs as any).bagType)}</span>
+            </div>
+          )}
+          {(item.specs as any).buttSealMm != null && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 border">
+              <span className="text-xs text-muted-foreground">Butt Seal</span>
+              <span className="text-sm font-medium">{(item.specs as any).buttSealMm} mm</span>
+            </div>
+          )}
+          {(item.specs as any).sideSealMm != null && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 border">
+              <span className="text-xs text-muted-foreground">Side Seal</span>
+              <span className="text-sm font-medium">{(item.specs as any).sideSealMm} mm</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
