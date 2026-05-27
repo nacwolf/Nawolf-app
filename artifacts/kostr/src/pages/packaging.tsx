@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Package } from "lucide-react";
+import { Plus, Search, Package, FileText, FileCheck2 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { getApiUrl } from "@/lib/queryClient";
 import type { PackagingItem } from "@workspace/api-client-react";
@@ -204,6 +204,7 @@ export default function PackagingList() {
                   <TableHead className="text-right">Unit Cost</TableHead>
                   <TableHead className="text-right">MOQ</TableHead>
                   <TableHead className="text-right">Lead Time</TableHead>
+                  <TableHead className="text-center">Docs</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -233,6 +234,22 @@ export default function PackagingList() {
                     <TableCell className="text-right text-muted-foreground">{item.moq ?? "—"}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {item.leadTimeDays != null ? `${item.leadTimeDays}d` : "—"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {item.quotationObjectPath && (
+                          <span title="Quotation attached" className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            <FileText className="w-3 h-3" />
+                            Quote
+                          </span>
+                        )}
+                        {item.specDocObjectPath && (
+                          <span title="Spec sheet attached" className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <FileCheck2 className="w-3 h-3" />
+                            Spec
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
