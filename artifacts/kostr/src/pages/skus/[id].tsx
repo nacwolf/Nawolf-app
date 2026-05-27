@@ -245,7 +245,7 @@ export default function SkuDetail({ id }: { id: string }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ── New spec sections ──
-  const [specOpen, setSpecOpen] = useState<Record<string, boolean>>({ II: false, III: false, IV: false, V: false });
+  const [specOpen, setSpecOpen] = useState<Record<string, boolean>>({ II: false, III: false, IV: false, V: false, VI: false, VII: false });
   const toggleSpec = (s: string) => setSpecOpen(p => ({ ...p, [s]: !p[s] }));
 
   // Spec II edit state
@@ -278,10 +278,15 @@ export default function SkuDetail({ id }: { id: string }) {
         haccpCertified: !!s?.haccpCertified, organicCertified: !!s?.organicCertified,
         otherCertifications: s?.otherCertifications ?? "",
       });
-    } else if (section === "V") {
+    } else if (section === "VI") {
       Object.assign(base, {
-        ingredientsListThai: s?.ingredientsListThai ?? "", ingredientsListEnglish: s?.ingredientsListEnglish ?? "",
-        allergenInfo: s?.allergenInfo ?? "", nutritionalInfo: s?.nutritionalInfo ?? "",
+        ingredientsListThai: s?.ingredientsListThai ?? "",
+        ingredientsListEnglish: s?.ingredientsListEnglish ?? "",
+        allergenInfo: s?.allergenInfo ?? "",
+      });
+    } else if (section === "VII") {
+      Object.assign(base, {
+        nutritionalInfo: s?.nutritionalInfo ?? "",
       });
     }
     setSpecDraft(base);
@@ -321,10 +326,11 @@ export default function SkuDetail({ id }: { id: string }) {
         patch.haccpCertified = !!d.haccpCertified;
         patch.organicCertified = !!d.organicCertified;
         patch.otherCertifications = d.otherCertifications || null;
-      } else if (section === "V") {
+      } else if (section === "VI") {
         patch.ingredientsListThai = d.ingredientsListThai || null;
         patch.ingredientsListEnglish = d.ingredientsListEnglish || null;
         patch.allergenInfo = d.allergenInfo || null;
+      } else if (section === "VII") {
         patch.nutritionalInfo = d.nutritionalInfo || null;
       }
       await updateSku.mutateAsync({ id: skuId, data: patch });
@@ -1472,37 +1478,9 @@ export default function SkuDetail({ id }: { id: string }) {
         </button>
         {specOpen.V && (
           <CardContent className="space-y-6">
-            {/* Text fields */}
-            {editingSpec === "V" ? (
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1"><label className="text-sm font-medium">Ingredients List (Thai)</label><Textarea rows={3} value={specDraft.ingredientsListThai ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListThai: e.target.value }))} /></div>
-                  <div className="space-y-1"><label className="text-sm font-medium">Ingredients List (English)</label><Textarea rows={3} value={specDraft.ingredientsListEnglish ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListEnglish: e.target.value }))} /></div>
-                  <div className="space-y-1"><label className="text-sm font-medium">Allergen Information</label><Textarea rows={2} value={specDraft.allergenInfo ?? ""} onChange={e => setSpecDraft(p => ({ ...p, allergenInfo: e.target.value }))} /></div>
-                  <div className="space-y-1"><label className="text-sm font-medium">Nutritional Info</label><Textarea rows={2} value={specDraft.nutritionalInfo ?? ""} onChange={e => setSpecDraft(p => ({ ...p, nutritionalInfo: e.target.value }))} /></div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
-                  <Button size="sm" onClick={() => saveSpec("V")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {(() => { const s = sku as any; return (
-                  <div className="grid gap-3 md:grid-cols-2 text-sm">
-                    {s?.ingredientsListThai && <div><p className="text-muted-foreground text-xs mb-1">Ingredients (Thai)</p><p className="whitespace-pre-wrap">{s.ingredientsListThai}</p></div>}
-                    {s?.ingredientsListEnglish && <div><p className="text-muted-foreground text-xs mb-1">Ingredients (English)</p><p className="whitespace-pre-wrap">{s.ingredientsListEnglish}</p></div>}
-                    {s?.allergenInfo && <div><p className="text-muted-foreground text-xs mb-1">Allergens</p><p>{s.allergenInfo}</p></div>}
-                    {s?.nutritionalInfo && <div><p className="text-muted-foreground text-xs mb-1">Nutritional Info</p><p className="whitespace-pre-wrap">{s.nutritionalInfo}</p></div>}
-                    {!s?.ingredientsListThai && !s?.ingredientsListEnglish && !s?.allergenInfo && !s?.nutritionalInfo && <p className="md:col-span-2 text-muted-foreground py-1">No label text added yet.</p>}
-                  </div>
-                ); })()}
-                <Button variant="outline" size="sm" onClick={() => startEditSpec("V")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
-              </div>
-            )}
 
             {/* Single file uploads */}
-            <div className="grid gap-4 md:grid-cols-3 pt-2 border-t">
+            <div className="grid gap-4 md:grid-cols-3">
               {([
                 { label: "Label File", urlKey: "labelFileUrl", nameKey: "labelFileName", endpoint: `/skus/${skuId}/label-file`, ref: labelRef, accept: ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" },
                 { label: "Spec Sheet", urlKey: "specSheetUrl", nameKey: "specSheetFileName", endpoint: `/skus/${skuId}/spec-sheet`, ref: specRef, accept: ".pdf,application/pdf" },
@@ -1575,6 +1553,135 @@ export default function SkuDetail({ id }: { id: string }) {
                 try { for (const f of files) await uploadSingleFile(f, `/skus/${skuId}/certificate-files`, "POST"); } finally { setUploadingFile(null); }
               }} />
             </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ── Section VI — Ingredient List ── */}
+      <Card>
+        <button type="button" className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg" onClick={() => toggleSpec("VI")}>
+          <span className="text-sm font-semibold">VI — Ingredient List</span>
+          {specOpen.VI ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {specOpen.VI && (
+          <CardContent className="space-y-4">
+            {editingSpec === "VI" ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Ingredients List (Thai)</label>
+                    <Textarea rows={6} placeholder="ส่วนประกอบ: น้ำตาล, แป้ง, ..." value={specDraft.ingredientsListThai ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListThai: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Ingredients List (English)</label>
+                    <Textarea rows={6} placeholder="Ingredients: Sugar, Flour, ..." value={specDraft.ingredientsListEnglish ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListEnglish: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Allergen Information</label>
+                  <Textarea rows={2} placeholder="Contains: Wheat, Milk. May contain traces of nuts." value={specDraft.allergenInfo ?? ""} onChange={e => setSpecDraft(p => ({ ...p, allergenInfo: e.target.value }))} />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                  <Button size="sm" onClick={() => saveSpec("VI")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(() => { const s = sku as any; const hasThai = !!s?.ingredientsListThai; const hasEng = !!s?.ingredientsListEnglish; const hasAllergen = !!s?.allergenInfo; return (
+                  <>
+                    {(hasThai || hasEng) ? (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {hasThai && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Thai</p>
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed border rounded-lg p-3 bg-muted/20">{s.ingredientsListThai}</p>
+                          </div>
+                        )}
+                        {hasEng && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">English</p>
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed border rounded-lg p-3 bg-muted/20">{s.ingredientsListEnglish}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">No ingredient list added yet.</p>
+                    )}
+                    {hasAllergen && (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Allergen Information</p>
+                        <div className="flex items-start gap-2 border rounded-lg p-3 bg-amber-50/60 border-amber-200">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-amber-900">{s.allergenInfo}</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ); })()}
+                <Button variant="outline" size="sm" onClick={() => startEditSpec("VI")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ── Section VII — Nutrition Info ── */}
+      <Card>
+        <button type="button" className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/30 transition-colors rounded-t-lg" onClick={() => toggleSpec("VII")}>
+          <span className="text-sm font-semibold">VII — Nutrition Info</span>
+          {specOpen.VII ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {specOpen.VII && (
+          <CardContent className="space-y-4">
+            {editingSpec === "VII" ? (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Nutritional Information</label>
+                  <p className="text-xs text-muted-foreground">Enter per-serving values — e.g. "Energy: 160 kcal / Protein: 3 g / Fat: 5 g / Carbohydrates: 25 g / Sugar: 10 g / Sodium: 120 mg"</p>
+                  <Textarea rows={8} placeholder={"Serving size: 40g\nServings per container: 1\n\nEnergy: 160 kcal\nProtein: 3 g\nTotal Fat: 5 g\n  - Saturated Fat: 2 g\nCarbohydrates: 25 g\n  - Sugar: 10 g\nDietary Fibre: 1 g\nSodium: 120 mg"} value={specDraft.nutritionalInfo ?? ""} onChange={e => setSpecDraft(p => ({ ...p, nutritionalInfo: e.target.value }))} />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                  <Button size="sm" onClick={() => saveSpec("VII")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(() => { const s = sku as any; return s?.nutritionalInfo ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-4 py-2 border-b">
+                      <p className="text-xs font-bold uppercase tracking-widest">Nutrition Facts</p>
+                    </div>
+                    <div className="px-4 py-3">
+                      {s.nutritionalInfo.split("\n").map((line: string, i: number) => {
+                        const isSubRow = line.startsWith("  ") || line.startsWith("\t");
+                        const parts = line.trim().split(/:\s*/);
+                        const hasColon = parts.length >= 2;
+                        return (
+                          <div
+                            key={i}
+                            className={`flex items-center justify-between py-1 text-sm ${i > 0 ? "border-t border-dashed border-muted-foreground/20" : ""} ${isSubRow ? "pl-4 text-muted-foreground" : ""}`}
+                          >
+                            {hasColon ? (
+                              <>
+                                <span className={isSubRow ? "" : "font-medium"}>{parts[0]}</span>
+                                <span className="font-mono text-xs">{parts.slice(1).join(": ")}</span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground italic w-full">{line.trim() || <span className="select-none">&nbsp;</span>}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No nutritional information added yet.</p>
+                ); })()}
+                <Button variant="outline" size="sm" onClick={() => startEditSpec("VII")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>
