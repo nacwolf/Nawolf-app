@@ -20,6 +20,8 @@ export interface UpdateIngredientBody {
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
+  countryOfOrigin?: string | null;
+  /** @nullable */
   priceTier1?: number | null;
   /** @nullable */
   priceTier1Description?: string | null;

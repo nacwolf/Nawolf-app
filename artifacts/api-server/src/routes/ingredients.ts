@@ -279,6 +279,7 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     category?: string;
     unit?: string;
     supplier?: string | null;
+    countryOfOrigin?: string | null;
     subCategory?: string | null;
     description?: string | null;
     notes?: string | null;
@@ -315,6 +316,7 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
   if (body.category !== undefined) updateData.category = body.category;
   if (body.unit !== undefined) updateData.unit = body.unit;
   if (body.supplier !== undefined) updateData.supplier = body.supplier?.trim() || null;
+  if (body.countryOfOrigin !== undefined) updateData.countryOfOrigin = body.countryOfOrigin?.trim() || null;
   if (body.subCategory !== undefined) updateData.subCategory = body.subCategory?.trim() || null;
   if (body.description !== undefined) updateData.description = body.description?.trim() || null;
   if (body.notes !== undefined) updateData.notes = body.notes || null;

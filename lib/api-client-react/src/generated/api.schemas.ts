@@ -25,6 +25,8 @@ export interface Ingredient {
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
+  countryOfOrigin?: string | null;
+  /** @nullable */
   priceTier1?: number | null;
   /** @nullable */
   priceTier1Description?: string | null;
@@ -62,6 +64,8 @@ export interface IngredientWithPrice {
   unit: string;
   /** @nullable */
   supplier?: string | null;
+  /** @nullable */
+  countryOfOrigin?: string | null;
   /** @nullable */
   priceTier1?: number | null;
   /** @nullable */
@@ -117,6 +121,8 @@ export interface CreateIngredientBody {
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
+  countryOfOrigin?: string | null;
+  /** @nullable */
   initialPrice?: number | null;
   /** @nullable */
   priceTier1?: number | null;
@@ -143,6 +149,8 @@ export interface UpdateIngredientBody {
   description?: string | null;
   /** @nullable */
   supplier?: string | null;
+  /** @nullable */
+  countryOfOrigin?: string | null;
   /** @nullable */
   priceTier1?: number | null;
   /** @nullable */

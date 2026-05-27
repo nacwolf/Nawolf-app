@@ -15,6 +15,7 @@ export const ingredientsTable = pgTable("ingredients", {
   priceTier2: numeric("price_tier2", { precision: 12, scale: 4 }),
   priceTier2Description: text("price_tier2_description"),
   notes: text("notes"),
+  countryOfOrigin: text("country_of_origin"),
   createdBy: text("created_by"),
   photoUrl: text("photo_url"),
   photoContentType: text("photo_content_type"),

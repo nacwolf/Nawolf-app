@@ -17,6 +17,8 @@ export interface CreateIngredientBody {
   /** @nullable */
   supplier?: string | null;
   /** @nullable */
+  countryOfOrigin?: string | null;
+  /** @nullable */
   initialPrice?: number | null;
   /** @nullable */
   priceTier1?: number | null;

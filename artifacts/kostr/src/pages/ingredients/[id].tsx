@@ -60,6 +60,7 @@ const editSchema = z.object({
   subCategory: z.string().optional(),
   description: z.string().optional(),
   supplier: z.string().optional(),
+  countryOfOrigin: z.string().optional(),
   priceTier1: z.coerce.number().min(0).optional(),
   priceTier1Description: z.string().optional(),
   priceTier2: z.coerce.number().min(0).optional(),
@@ -140,6 +141,7 @@ export default function IngredientDetail({ id }: { id: string }) {
       subCategory: "",
       description: "",
       supplier: "",
+      countryOfOrigin: "",
       priceTier1: undefined,
       priceTier1Description: "",
       priceTier2: undefined,
@@ -161,6 +163,7 @@ export default function IngredientDetail({ id }: { id: string }) {
         subCategory: ingredient.subCategory ?? "",
         description: ingredient.description ?? "",
         supplier: ingredient.supplier ?? "",
+        countryOfOrigin: ingredient.countryOfOrigin ?? "",
         priceTier1: ingredient.priceTier1 ?? undefined,
         priceTier1Description: ingredient.priceTier1Description ?? "",
         priceTier2: ingredient.priceTier2 ?? undefined,
@@ -201,6 +204,7 @@ export default function IngredientDetail({ id }: { id: string }) {
         subCategory: data.subCategory || null,
         description: data.description || null,
         supplier: data.supplier || null,
+        countryOfOrigin: data.countryOfOrigin || null,
         priceTier1: data.priceTier1 ?? null,
         priceTier1Description: data.priceTier1Description || null,
         priceTier2: data.priceTier2 ?? null,
@@ -365,6 +369,7 @@ export default function IngredientDetail({ id }: { id: string }) {
             <h1 className="text-2xl font-bold tracking-tight">{ingredient.name}</h1>
             <p className="text-sm text-muted-foreground">
               {ingredient.category}{ingredient.subCategory ? ` · ${ingredient.subCategory}` : ""} · {ingredient.unit}
+              {ingredient.countryOfOrigin && <span className="ml-2">· {ingredient.countryOfOrigin}</span>}
               {ingredient.createdBy && <span className="ml-2">· Added by {ingredient.createdBy}</span>}
             </p>
           </div>
@@ -480,6 +485,14 @@ export default function IngredientDetail({ id }: { id: string }) {
                 <FormItem>
                   <FormLabel>Supplier</FormLabel>
                   <FormControl><Input placeholder="Supplier name" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={editForm.control} name="countryOfOrigin" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Country of Origin</FormLabel>
+                  <FormControl><Input placeholder="e.g. Thailand, China, USA" {...field} value={field.value || ""} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

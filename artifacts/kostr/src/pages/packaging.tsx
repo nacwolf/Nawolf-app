@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, Package } from "lucide-react";
@@ -60,6 +61,7 @@ export default function PackagingList() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"name" | "supplier" | "unitCost" | "size">("name");
 
   const { data: items, isLoading } = useQuery<PackagingItem[]>({
     queryKey: ["/api/packaging"],
@@ -69,6 +71,18 @@ export default function PackagingList() {
       return r.json();
     },
   });
+
+  const getSizeScore = (item: PackagingItem): number => {
+    const s = item.specs as any;
+    if (!s) return 0;
+    if (s.widthMm && s.lengthMm) return (s.widthMm / 10) * (s.lengthMm / 10);
+    if (s.lengthCm && s.widthCm && s.heightCm) return s.lengthCm * s.widthCm * s.heightCm;
+    if (s.lengthCm && s.widthCm) return s.lengthCm * s.widthCm;
+    if (s.rollWidthMm && s.lengthMm) return (s.rollWidthMm / 10) * (s.lengthMm / 10);
+    if (s.rollWidthMm) return s.rollWidthMm / 10;
+    if (s.heightMm) return s.heightMm;
+    return 0;
+  };
 
   const filtered = useMemo(() => {
     if (!items) return [];
@@ -83,8 +97,13 @@ export default function PackagingList() {
         categoryLabel(i.category).toLowerCase().includes(q)
       );
     }
-    return result;
-  }, [items, activeCategory, search]);
+    return [...result].sort((a, b) => {
+      if (sortBy === "supplier") return (a.supplier || "").localeCompare(b.supplier || "");
+      if (sortBy === "unitCost") return a.unitCost - b.unitCost;
+      if (sortBy === "size") return getSizeScore(a) - getSizeScore(b);
+      return a.nameEnglish.localeCompare(b.nameEnglish);
+    });
+  }, [items, activeCategory, search, sortBy]);
 
   const countByCategory = useMemo(() => {
     if (!items) return {} as Record<string, number>;
@@ -128,8 +147,8 @@ export default function PackagingList() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-48 max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name, supplier, or category..."
@@ -137,6 +156,20 @@ export default function PackagingList() {
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
               />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Sort by</span>
+              <Select value={sortBy} onValueChange={v => setSortBy(v as typeof sortBy)}>
+                <SelectTrigger className="w-36 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="supplier">Supplier</SelectItem>
+                  <SelectItem value="unitCost">Unit Cost</SelectItem>
+                  <SelectItem value="size">Size</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {search && (
               <span className="text-sm text-muted-foreground">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
