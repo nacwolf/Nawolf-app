@@ -79,7 +79,8 @@ export default function PackagingList() {
       result = result.filter(i =>
         i.nameEnglish.toLowerCase().includes(q) ||
         (i.nameThai || "").toLowerCase().includes(q) ||
-        (i.supplier || "").toLowerCase().includes(q)
+        (i.supplier || "").toLowerCase().includes(q) ||
+        categoryLabel(i.category).toLowerCase().includes(q)
       );
     }
     return result;
@@ -131,7 +132,7 @@ export default function PackagingList() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by name or supplier..."
+                placeholder="Search by name, supplier, or category..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
