@@ -347,8 +347,10 @@ export const CreateSkuBody = zod.object({
   organicCertified: zod.boolean().optional(),
   otherCertifications: zod.string().nullish(),
   // Section V text
+  productDescription: zod.string().nullish(),
   ingredientsListThai: zod.string().nullish(),
   ingredientsListEnglish: zod.string().nullish(),
+  ingredientLines: zod.array(zod.object({ nameThai: zod.string(), nameEnglish: zod.string(), percentage: zod.number() })).nullish(),
   allergenInfo: zod.string().nullish(),
   nutritionalInfo: zod.string().nullish(),
   costLines: zod
@@ -448,8 +450,10 @@ export const UpdateSkuBody = zod.object({
   haccpCertified: zod.boolean().nullish(),
   organicCertified: zod.boolean().nullish(),
   otherCertifications: zod.string().nullish(),
+  productDescription: zod.string().nullish(),
   ingredientsListThai: zod.string().nullish(),
   ingredientsListEnglish: zod.string().nullish(),
+  ingredientLines: zod.array(zod.object({ nameThai: zod.string(), nameEnglish: zod.string(), percentage: zod.number() })).nullish(),
   allergenInfo: zod.string().nullish(),
   nutritionalInfo: zod.string().nullish(),
 });

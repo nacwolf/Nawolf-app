@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, numeric, integer, date, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, integer, date, pgEnum, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ingredientsTable } from "./ingredients";
@@ -70,11 +70,15 @@ export const skusTable = pgTable("skus", {
   organicCertified: boolean("organic_certified").default(false),
   otherCertifications: text("other_certifications"),
 
-  // Section V — Labelling & Files (text fields)
+  // Section V — Labelling & Files (text / structured fields)
+  productDescription: text("product_description"),
   ingredientsListThai: text("ingredients_list_thai"),
   ingredientsListEnglish: text("ingredients_list_english"),
+  ingredientLines: jsonb("ingredient_lines").$type<Array<{ nameThai: string; nameEnglish: string; percentage: number }>>(),
   allergenInfo: text("allergen_info"),
   nutritionalInfo: text("nutritional_info"),
+  nutritionDocPath: text("nutrition_doc_path"),
+  nutritionDocContentType: text("nutrition_doc_content_type"),
 
   // Section V — Single file uploads
   photoUrl: text("photo_url"),

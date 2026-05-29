@@ -178,6 +178,29 @@ router.delete("/skus/:id/certificate-files/:fileId", requireAuth, async (req, re
   res.json({ success: true });
 });
 
+// ── SKU nutrition document ────────────────────────────────────────────────────
+
+router.patch("/skus/:id/nutrition-doc", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { objectPath, contentType } = req.body;
+  if (!isValidObjectPath(objectPath)) { res.status(400).json({ error: "objectPath must start with /objects/" }); return; }
+  const [sku] = await db.update(skusTable)
+    .set({ nutritionDocPath: objectPath, nutritionDocContentType: resolveType(contentType, ALLOWED_DOC_TYPES) })
+    .where(eq(skusTable.id, id))
+    .returning({ nutritionDocPath: skusTable.nutritionDocPath, nutritionDocContentType: skusTable.nutritionDocContentType });
+  if (!sku) { res.status(404).json({ error: "SKU not found" }); return; }
+  res.json(sku);
+});
+
+router.delete("/skus/:id/nutrition-doc", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [sku] = await db.update(skusTable).set({ nutritionDocPath: null, nutritionDocContentType: null }).where(eq(skusTable.id, id)).returning({ id: skusTable.id });
+  if (!sku) { res.status(404).json({ error: "SKU not found" }); return; }
+  res.json({ success: true });
+});
+
 // ── Ingredient photo ──────────────────────────────────────────────────────────
 
 router.patch("/ingredients/:id/photo", requireAuth, async (req, res): Promise<void> => {

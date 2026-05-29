@@ -231,8 +231,10 @@ router.patch("/skus/:id", requireAuth, async (req, res): Promise<void> => {
   setIfPresent("haccpCertified", d.haccpCertified);
   setIfPresent("organicCertified", d.organicCertified);
   setIfPresent("otherCertifications", d.otherCertifications);
+  setIfPresent("productDescription", d.productDescription);
   setIfPresent("ingredientsListThai", d.ingredientsListThai);
   setIfPresent("ingredientsListEnglish", d.ingredientsListEnglish);
+  setIfPresent("ingredientLines", d.ingredientLines !== undefined ? (d.ingredientLines ?? null) : undefined);
   setIfPresent("allergenInfo", d.allergenInfo);
   setIfPresent("nutritionalInfo", d.nutritionalInfo);
 

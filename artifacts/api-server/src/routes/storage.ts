@@ -113,14 +113,15 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
         .limit(1),
     ]);
 
-    // Also check SKU single-file columns (label, spec sheet, dieline)
-    const [skuLabelFile, skuSpecFile, skuDielineFile] = await Promise.all([
+    // Also check SKU single-file columns (label, spec sheet, dieline, nutrition doc)
+    const [skuLabelFile, skuSpecFile, skuDielineFile, skuNutritionDoc] = await Promise.all([
       db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.labelFileUrl, objectPath)).limit(1),
       db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.specSheetUrl, objectPath)).limit(1),
       db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.dielineUrl, objectPath)).limit(1),
+      db.select({ id: skusTable.id }).from(skusTable).where(eq(skusTable.nutritionDocPath, objectPath)).limit(1),
     ]);
 
-    if (!attachment[0] && !skuPhoto[0] && !ingPhoto[0] && !skuLabelFile[0] && !skuSpecFile[0] && !skuDielineFile[0] && !skuProdPhoto[0] && !skuCertFile[0] && !packagingPhoto[0]) {
+    if (!attachment[0] && !skuPhoto[0] && !ingPhoto[0] && !skuLabelFile[0] && !skuSpecFile[0] && !skuDielineFile[0] && !skuNutritionDoc[0] && !skuProdPhoto[0] && !skuCertFile[0] && !packagingPhoto[0]) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

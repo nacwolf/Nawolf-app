@@ -278,10 +278,17 @@ export default function SkuDetail({ id }: { id: string }) {
         haccpCertified: !!s?.haccpCertified, organicCertified: !!s?.organicCertified,
         otherCertifications: s?.otherCertifications ?? "",
       });
+    } else if (section === "V") {
+      Object.assign(base, {
+        productDescription: s?.productDescription ?? "",
+        fdaNumber: s?.fdaNumber ?? "",
+        barcodeEan13: s?.barcodeEan13 ?? "",
+      });
     } else if (section === "VI") {
       Object.assign(base, {
-        ingredientsListThai: s?.ingredientsListThai ?? "",
-        ingredientsListEnglish: s?.ingredientsListEnglish ?? "",
+        ingredientLines: Array.isArray(s?.ingredientLines) && s.ingredientLines.length > 0
+          ? s.ingredientLines.map((r: any) => ({ nameThai: r.nameThai ?? "", nameEnglish: r.nameEnglish ?? "", percentage: r.percentage ?? 0 }))
+          : [],
         allergenInfo: s?.allergenInfo ?? "",
       });
     } else if (section === "VII") {
@@ -326,9 +333,12 @@ export default function SkuDetail({ id }: { id: string }) {
         patch.haccpCertified = !!d.haccpCertified;
         patch.organicCertified = !!d.organicCertified;
         patch.otherCertifications = d.otherCertifications || null;
+      } else if (section === "V") {
+        patch.productDescription = d.productDescription || null;
+        patch.fdaNumber = d.fdaNumber || null;
+        patch.barcodeEan13 = d.barcodeEan13 || null;
       } else if (section === "VI") {
-        patch.ingredientsListThai = d.ingredientsListThai || null;
-        patch.ingredientsListEnglish = d.ingredientsListEnglish || null;
+        patch.ingredientLines = Array.isArray(d.ingredientLines) && d.ingredientLines.length > 0 ? d.ingredientLines : null;
         patch.allergenInfo = d.allergenInfo || null;
       } else if (section === "VII") {
         patch.nutritionalInfo = d.nutritionalInfo || null;
@@ -350,6 +360,7 @@ export default function SkuDetail({ id }: { id: string }) {
   const dielineRef = useRef<HTMLInputElement>(null);
   const prodPhotosRef = useRef<HTMLInputElement>(null);
   const certsRef = useRef<HTMLInputElement>(null);
+  const nutritionDocRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
 
   async function uploadSingleFile(file: File, endpoint: string, method: "PATCH" | "POST" = "PATCH") {
@@ -1479,8 +1490,73 @@ export default function SkuDetail({ id }: { id: string }) {
         {specOpen.V && (
           <CardContent className="space-y-6">
 
+            {/* Labelling details — product description, FDA, barcode */}
+            <div className="space-y-3">
+              {editingSpec === "V" ? (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Product Description</label>
+                    <Textarea rows={3} placeholder="Describe the product as it appears on the label…" value={specDraft.productDescription ?? ""} onChange={e => setSpecDraft(p => ({ ...p, productDescription: e.target.value }))} />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">FDA Registration Number</label>
+                      <Input placeholder="e.g. 10-2-12345" value={specDraft.fdaNumber ?? ""} onChange={e => setSpecDraft(p => ({ ...p, fdaNumber: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">Barcode EAN-13</label>
+                      <Input placeholder="e.g. 8850012345678" value={specDraft.barcodeEan13 ?? ""} onChange={e => setSpecDraft(p => ({ ...p, barcodeEan13: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditingSpec(null)}>Cancel</Button>
+                    <Button size="sm" onClick={() => saveSpec("V")} disabled={savingSpec}>{savingSpec && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}<Save className="w-3 h-3 mr-1" />Save</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(() => {
+                    const s = sku as any;
+                    const hasDesc = !!s?.productDescription;
+                    const hasFda = !!s?.fdaNumber;
+                    const hasBarcode = !!s?.barcodeEan13;
+                    return (
+                      <>
+                        {hasDesc && (
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Product Description</p>
+                            <p className="text-sm whitespace-pre-wrap">{s.productDescription}</p>
+                          </div>
+                        )}
+                        {(hasFda || hasBarcode) && (
+                          <div className="flex flex-wrap gap-4">
+                            {hasFda && (
+                              <div className="space-y-0.5">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">FDA No.</p>
+                                <p className="text-sm font-mono">{s.fdaNumber}</p>
+                              </div>
+                            )}
+                            {hasBarcode && (
+                              <div className="space-y-0.5">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Barcode EAN-13</p>
+                                <p className="text-sm font-mono">{s.barcodeEan13}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!hasDesc && !hasFda && !hasBarcode && (
+                          <p className="text-muted-foreground text-sm">No labelling details added yet.</p>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => startEditSpec("V")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
             {/* Single file uploads */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3 pt-2 border-t">
               {([
                 { label: "Label File", urlKey: "labelFileUrl", nameKey: "labelFileName", endpoint: `/skus/${skuId}/label-file`, ref: labelRef, accept: ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" },
                 { label: "Spec Sheet", urlKey: "specSheetUrl", nameKey: "specSheetFileName", endpoint: `/skus/${skuId}/spec-sheet`, ref: specRef, accept: ".pdf,application/pdf" },
@@ -1567,15 +1643,50 @@ export default function SkuDetail({ id }: { id: string }) {
           <CardContent className="space-y-4">
             {editingSpec === "VI" ? (
               <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">Ingredients List (Thai)</label>
-                    <Textarea rows={6} placeholder="ส่วนประกอบ: น้ำตาล, แป้ง, ..." value={specDraft.ingredientsListThai ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListThai: e.target.value }))} />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Ingredients</label>
+                    {(() => {
+                      const rows: any[] = specDraft.ingredientLines ?? [];
+                      const total = rows.reduce((s: number, r: any) => s + (parseFloat(r.percentage) || 0), 0);
+                      return <span className={`text-xs font-mono ${Math.abs(total - 100) < 0.01 ? "text-green-600" : "text-muted-foreground"}`}>{total.toFixed(1)}% total</span>;
+                    })()}
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium">Ingredients List (English)</label>
-                    <Textarea rows={6} placeholder="Ingredients: Sugar, Flour, ..." value={specDraft.ingredientsListEnglish ?? ""} onChange={e => setSpecDraft(p => ({ ...p, ingredientsListEnglish: e.target.value }))} />
-                  </div>
+                  {(specDraft.ingredientLines ?? []).map((row: any, idx: number) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <div className="flex-1 grid gap-1.5 grid-cols-2">
+                        <Input
+                          placeholder="ชื่อไทย (Thai name)"
+                          value={row.nameThai}
+                          onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], nameThai: e.target.value }; return { ...p, ingredientLines: rows }; })}
+                        />
+                        <Input
+                          placeholder="English name"
+                          value={row.nameEnglish}
+                          onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], nameEnglish: e.target.value }; return { ...p, ingredientLines: rows }; })}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 w-24 flex-shrink-0">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          placeholder="%"
+                          value={row.percentage === 0 && row.nameThai === "" && row.nameEnglish === "" ? "" : row.percentage}
+                          onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], percentage: parseFloat(e.target.value) || 0 }; return { ...p, ingredientLines: rows }; })}
+                          className="text-right"
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive flex-shrink-0" onClick={() => setSpecDraft(p => ({ ...p, ingredientLines: (p.ingredientLines ?? []).filter((_: any, i: number) => i !== idx) }))}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setSpecDraft(p => ({ ...p, ingredientLines: [...(p.ingredientLines ?? []), { nameThai: "", nameEnglish: "", percentage: 0 }] }))}>
+                    <Plus className="w-3.5 h-3.5 mr-1" />Add ingredient
+                  </Button>
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium">Allergen Information</label>
@@ -1588,38 +1699,42 @@ export default function SkuDetail({ id }: { id: string }) {
               </div>
             ) : (
               <div className="space-y-4">
-                {(() => { const s = sku as any; const hasThai = !!s?.ingredientsListThai; const hasEng = !!s?.ingredientsListEnglish; const hasAllergen = !!s?.allergenInfo; return (
-                  <>
-                    {(hasThai || hasEng) ? (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {hasThai && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Thai</p>
-                            <p className="text-sm whitespace-pre-wrap leading-relaxed border rounded-lg p-3 bg-muted/20">{s.ingredientsListThai}</p>
+                {(() => {
+                  const s = sku as any;
+                  const lines: Array<{ nameThai: string; nameEnglish: string; percentage: number }> = Array.isArray(s?.ingredientLines) ? s.ingredientLines : [];
+                  const hasAllergen = !!s?.allergenInfo;
+                  return (
+                    <>
+                      {lines.length > 0 ? (
+                        <div className="border rounded-lg overflow-hidden">
+                          <div className="bg-muted/40 px-3 py-1.5 border-b">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ingredient List</p>
                           </div>
-                        )}
-                        {hasEng && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">English</p>
-                            <p className="text-sm whitespace-pre-wrap leading-relaxed border rounded-lg p-3 bg-muted/20">{s.ingredientsListEnglish}</p>
+                          <div className="divide-y">
+                            {lines.map((row, i) => (
+                              <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                                <span>{row.nameThai && row.nameEnglish ? `${row.nameThai} / ${row.nameEnglish}` : row.nameThai || row.nameEnglish}</span>
+                                <span className="font-mono text-xs ml-4 flex-shrink-0">{row.percentage}%</span>
+                              </div>
+                            ))}
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm">No ingredient list added yet.</p>
-                    )}
-                    {hasAllergen && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Allergen Information</p>
-                        <div className="flex items-start gap-2 border rounded-lg p-3 bg-amber-50/60 border-amber-200">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-amber-900">{s.allergenInfo}</p>
                         </div>
-                      </div>
-                    )}
-                  </>
-                ); })()}
-                <Button variant="outline" size="sm" onClick={() => startEditSpec("VI")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">No ingredient list added yet.</p>
+                      )}
+                      {hasAllergen && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Allergen Information</p>
+                          <div className="flex items-start gap-2 border rounded-lg p-3 bg-amber-50/60 border-amber-200">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-amber-900">{s.allergenInfo}</p>
+                          </div>
+                        </div>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => startEditSpec("VI")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </CardContent>
@@ -1682,6 +1797,48 @@ export default function SkuDetail({ id }: { id: string }) {
                 <Button variant="outline" size="sm" onClick={() => startEditSpec("VII")}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
               </div>
             )}
+
+            {/* Nutrition document / photo upload */}
+            <div className="pt-2 border-t space-y-2">
+              <label className="text-sm font-medium">Nutrition Document or Photo</label>
+              {(() => {
+                const s = sku as any;
+                const docPath = s?.nutritionDocPath;
+                const contentType = s?.nutritionDocContentType ?? "";
+                const isImage = contentType.startsWith("image/");
+                const endpoint = `/skus/${skuId}/nutrition-doc`;
+                if (docPath) {
+                  const fileUrl = getApiUrl(`/storage${docPath}`);
+                  return (
+                    <div className="space-y-2">
+                      {isImage ? (
+                        <div className="relative group inline-block">
+                          <img src={fileUrl} alt="Nutrition" className="max-h-64 rounded-lg border object-contain" />
+                          <button type="button" onClick={() => deleteFile(endpoint)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 bg-muted/40 rounded-lg px-3 py-2">
+                          <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 text-xs truncate text-primary hover:underline">View nutrition document</a>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => deleteFile(endpoint)} title="Remove"><X className="w-3 h-3" /></Button>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => nutritionDocRef.current?.click()} disabled={uploadingFile === endpoint} className="flex items-center gap-2 border-2 border-dashed border-muted-foreground/25 rounded-lg px-3 py-2 hover:border-primary/50 hover:bg-muted/20 transition-colors text-sm text-muted-foreground disabled:opacity-50">
+                        {uploadingFile === endpoint ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}Replace
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button type="button" onClick={() => nutritionDocRef.current?.click()} disabled={uploadingFile === endpoint} className="flex items-center gap-2 w-full border-2 border-dashed border-muted-foreground/25 rounded-lg px-3 py-2 hover:border-primary/50 hover:bg-muted/20 transition-colors text-sm text-muted-foreground disabled:opacity-50">
+                    {uploadingFile === endpoint ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}Upload nutrition image or PDF
+                  </button>
+                );
+              })()}
+              <input ref={nutritionDocRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadSingleFile(f, `/skus/${skuId}/nutrition-doc`); }} />
+            </div>
           </CardContent>
         )}
       </Card>

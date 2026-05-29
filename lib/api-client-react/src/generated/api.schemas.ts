@@ -299,6 +299,12 @@ export interface SkuCertificateFile {
   uploadedAt: string;
 }
 
+export interface IngredientLine {
+  nameThai: string;
+  nameEnglish: string;
+  percentage: number;
+}
+
 export interface SkuDetail {
   id: number;
   skuCode: string;
@@ -326,6 +332,26 @@ export interface SkuDetail {
   snapshots: SkuSnapshot[];
   productPhotos?: SkuProductPhoto[];
   certificateFiles?: SkuCertificateFile[];
+  /** @nullable */
+  productDescription?: string | null;
+  /** @nullable */
+  ingredientLines?: IngredientLine[] | null;
+  /** @nullable */
+  nutritionDocPath?: string | null;
+  /** @nullable */
+  nutritionDocContentType?: string | null;
+  /** @nullable */
+  fdaNumber?: string | null;
+  /** @nullable */
+  barcodeEan13?: string | null;
+  /** @nullable */
+  ingredientsListThai?: string | null;
+  /** @nullable */
+  ingredientsListEnglish?: string | null;
+  /** @nullable */
+  allergenInfo?: string | null;
+  /** @nullable */
+  nutritionalInfo?: string | null;
 }
 
 export interface AddCostLineBody {
@@ -472,9 +498,13 @@ export interface UpdateSkuBody {
   /** @nullable */
   otherCertifications?: string | null;
   /** @nullable */
+  productDescription?: string | null;
+  /** @nullable */
   ingredientsListThai?: string | null;
   /** @nullable */
   ingredientsListEnglish?: string | null;
+  /** @nullable */
+  ingredientLines?: IngredientLine[] | null;
   /** @nullable */
   allergenInfo?: string | null;
   /** @nullable */
