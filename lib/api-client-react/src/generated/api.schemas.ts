@@ -300,8 +300,7 @@ export interface SkuCertificateFile {
 }
 
 export interface IngredientLine {
-  nameThai: string;
-  nameEnglish: string;
+  name: string;
   percentage: number;
 }
 

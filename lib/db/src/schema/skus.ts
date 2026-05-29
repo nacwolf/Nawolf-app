@@ -74,7 +74,7 @@ export const skusTable = pgTable("skus", {
   productDescription: text("product_description"),
   ingredientsListThai: text("ingredients_list_thai"),
   ingredientsListEnglish: text("ingredients_list_english"),
-  ingredientLines: jsonb("ingredient_lines").$type<Array<{ nameThai: string; nameEnglish: string; percentage: number }>>(),
+  ingredientLines: jsonb("ingredient_lines").$type<Array<{ name: string; percentage: number }>>(),
   allergenInfo: text("allergen_info"),
   nutritionalInfo: text("nutritional_info"),
   nutritionDocPath: text("nutrition_doc_path"),

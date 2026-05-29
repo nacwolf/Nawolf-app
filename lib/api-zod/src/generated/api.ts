@@ -350,7 +350,7 @@ export const CreateSkuBody = zod.object({
   productDescription: zod.string().nullish(),
   ingredientsListThai: zod.string().nullish(),
   ingredientsListEnglish: zod.string().nullish(),
-  ingredientLines: zod.array(zod.object({ nameThai: zod.string(), nameEnglish: zod.string(), percentage: zod.number() })).nullish(),
+  ingredientLines: zod.array(zod.object({ name: zod.string(), percentage: zod.number() })).nullish(),
   allergenInfo: zod.string().nullish(),
   nutritionalInfo: zod.string().nullish(),
   costLines: zod
@@ -453,7 +453,7 @@ export const UpdateSkuBody = zod.object({
   productDescription: zod.string().nullish(),
   ingredientsListThai: zod.string().nullish(),
   ingredientsListEnglish: zod.string().nullish(),
-  ingredientLines: zod.array(zod.object({ nameThai: zod.string(), nameEnglish: zod.string(), percentage: zod.number() })).nullish(),
+  ingredientLines: zod.array(zod.object({ name: zod.string(), percentage: zod.number() })).nullish(),
   allergenInfo: zod.string().nullish(),
   nutritionalInfo: zod.string().nullish(),
 });

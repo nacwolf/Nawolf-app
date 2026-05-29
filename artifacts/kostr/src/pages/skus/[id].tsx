@@ -287,7 +287,7 @@ export default function SkuDetail({ id }: { id: string }) {
     } else if (section === "VI") {
       Object.assign(base, {
         ingredientLines: Array.isArray(s?.ingredientLines) && s.ingredientLines.length > 0
-          ? s.ingredientLines.map((r: any) => ({ nameThai: r.nameThai ?? "", nameEnglish: r.nameEnglish ?? "", percentage: r.percentage ?? 0 }))
+          ? s.ingredientLines.map((r: any) => ({ name: r.name ?? "", percentage: r.percentage ?? 0 }))
           : [],
         allergenInfo: s?.allergenInfo ?? "",
       });
@@ -1654,18 +1654,12 @@ export default function SkuDetail({ id }: { id: string }) {
                   </div>
                   {(specDraft.ingredientLines ?? []).map((row: any, idx: number) => (
                     <div key={idx} className="flex gap-2 items-center">
-                      <div className="flex-1 grid gap-1.5 grid-cols-2">
-                        <Input
-                          placeholder="ชื่อไทย (Thai name)"
-                          value={row.nameThai}
-                          onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], nameThai: e.target.value }; return { ...p, ingredientLines: rows }; })}
-                        />
-                        <Input
-                          placeholder="English name"
-                          value={row.nameEnglish}
-                          onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], nameEnglish: e.target.value }; return { ...p, ingredientLines: rows }; })}
-                        />
-                      </div>
+                      <Input
+                        className="flex-1"
+                        placeholder="ชื่อไทย / English name"
+                        value={row.name}
+                        onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], name: e.target.value }; return { ...p, ingredientLines: rows }; })}
+                      />
                       <div className="flex items-center gap-1 w-24 flex-shrink-0">
                         <Input
                           type="number"
@@ -1673,7 +1667,7 @@ export default function SkuDetail({ id }: { id: string }) {
                           max={100}
                           step={0.1}
                           placeholder="%"
-                          value={row.percentage === 0 && row.nameThai === "" && row.nameEnglish === "" ? "" : row.percentage}
+                          value={row.percentage === 0 && row.name === "" ? "" : row.percentage}
                           onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], percentage: parseFloat(e.target.value) || 0 }; return { ...p, ingredientLines: rows }; })}
                           className="text-right"
                         />
@@ -1684,7 +1678,7 @@ export default function SkuDetail({ id }: { id: string }) {
                       </Button>
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => setSpecDraft(p => ({ ...p, ingredientLines: [...(p.ingredientLines ?? []), { nameThai: "", nameEnglish: "", percentage: 0 }] }))}>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => setSpecDraft(p => ({ ...p, ingredientLines: [...(p.ingredientLines ?? []), { name: "", percentage: 0 }] }))}>
                     <Plus className="w-3.5 h-3.5 mr-1" />Add ingredient
                   </Button>
                 </div>
@@ -1713,7 +1707,7 @@ export default function SkuDetail({ id }: { id: string }) {
                           <div className="divide-y">
                             {lines.map((row, i) => (
                               <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
-                                <span>{row.nameThai && row.nameEnglish ? `${row.nameThai} / ${row.nameEnglish}` : row.nameThai || row.nameEnglish}</span>
+                                <span>{row.name}</span>
                                 <span className="font-mono text-xs ml-4 flex-shrink-0">{row.percentage}%</span>
                               </div>
                             ))}
