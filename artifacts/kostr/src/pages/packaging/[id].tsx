@@ -343,7 +343,6 @@ export default function PackagingDetail({ id }: { id: string }) {
   const currentQuotationUrl = (item as any).quotationObjectPath ? getApiUrl(`/storage/objects${(item as any).quotationObjectPath.replace(/^\/objects/, "")}`) : null;
   const currentSpecDocUrl = (item as any).specDocObjectPath ? getApiUrl(`/storage/objects${(item as any).specDocObjectPath.replace(/^\/objects/, "")}`) : null;
   const isSachet = item.category === "sachet_primary_bag";
-  const showDocuments = true;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -484,8 +483,7 @@ export default function PackagingDetail({ id }: { id: string }) {
           )}
 
           {/* Documents & Media */}
-          {showDocuments ? (
-            <Card>
+          <Card>
               <CardHeader><CardTitle className="text-base">Documents & Media</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 {/* Product Photo */}
@@ -626,47 +624,6 @@ export default function PackagingDetail({ id }: { id: string }) {
                 </div>
               </CardContent>
             </Card>
-          ) : (
-            <Card>
-              <CardHeader><CardTitle className="text-base">Photo</CardTitle></CardHeader>
-              <CardContent className="flex gap-4 flex-wrap">
-                {currentPhotoUrl && !photoPreview && (
-                  <div className="relative inline-block">
-                    <img src={currentPhotoUrl} alt="Product" className="w-40 h-40 object-cover rounded-lg border" />
-                    <Button
-                      type="button" variant="destructive" size="icon"
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                      onClick={handleRemovePhoto} disabled={removingPhoto}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                )}
-                {photoPreview && (
-                  <div className="relative inline-block">
-                    <img src={photoPreview} alt="New photo preview" className="w-40 h-40 object-cover rounded-lg border border-primary" />
-                    <Button
-                      type="button" variant="destructive" size="icon"
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                      onClick={() => handlePhotoChange(null)}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                )}
-                {!photoPreview && (
-                  <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
-                    <Image className="w-6 h-6 text-muted-foreground mb-2" />
-                    <span className="text-xs text-muted-foreground text-center">{currentPhotoUrl ? "Replace photo" : "Upload photo"}<br/>JPG or PNG</span>
-                    <input
-                      type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
-                      onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           <div className="flex gap-3">
             <Button type="submit" disabled={isSaving}>

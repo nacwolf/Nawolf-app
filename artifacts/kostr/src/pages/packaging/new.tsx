@@ -327,7 +327,7 @@ export default function NewPackagingItem() {
           )}
 
           {/* Documents & Media */}
-          {showDocuments ? (
+          {showDocuments && (
             <Card>
               <CardHeader><CardTitle className="text-base">Documents & Media</CardTitle></CardHeader>
               <CardContent className="space-y-6">
@@ -402,33 +402,6 @@ export default function NewPackagingItem() {
                     </label>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader><CardTitle className="text-base">Photo</CardTitle></CardHeader>
-              <CardContent>
-                {photoPreview ? (
-                  <div className="relative inline-block">
-                    <img src={photoPreview} alt="Preview" className="w-40 h-40 object-cover rounded-lg border" />
-                    <Button
-                      type="button" variant="destructive" size="icon"
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                      onClick={() => handlePhotoChange(null)}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center w-40 h-40 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors">
-                    <Image className="w-6 h-6 text-muted-foreground mb-2" />
-                    <span className="text-xs text-muted-foreground text-center">Upload photo<br/>JPG or PNG</span>
-                    <input
-                      type="file" accept="image/jpeg,image/jpg,image/png" className="hidden"
-                      onChange={e => handlePhotoChange(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                )}
               </CardContent>
             </Card>
           )}
