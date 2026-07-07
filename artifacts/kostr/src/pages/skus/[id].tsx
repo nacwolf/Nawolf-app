@@ -15,7 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp, FileText, ImagePlus, X, Upload, Save } from "lucide-react";
+import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp, FileText, ImagePlus, X, Upload, Save, GripVertical } from "lucide-react";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -212,6 +215,56 @@ function IngredientPicker({ ingredients, selectedId, onSelect }: IngredientPicke
   );
 }
 
+function SortableIngredientRow({ id, row, idx, onChange, onRemove }: {
+  id: string;
+  row: { name: string; percentage: number };
+  idx: number;
+  onChange: (idx: number, field: "name" | "percentage", value: string) => void;
+  onRemove: (idx: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-2 items-center">
+      <button
+        type="button"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 touch-none"
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <Input
+        className="flex-1"
+        placeholder="ชื่อไทย / English name"
+        value={row.name}
+        onChange={e => onChange(idx, "name", e.target.value)}
+      />
+      <div className="flex items-center gap-1 w-24 flex-shrink-0">
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          step={0.1}
+          placeholder="%"
+          value={row.percentage === 0 && row.name === "" ? "" : row.percentage}
+          onChange={e => onChange(idx, "percentage", e.target.value)}
+          className="text-right"
+        />
+        <span className="text-sm text-muted-foreground">%</span>
+      </div>
+      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive flex-shrink-0" onClick={() => onRemove(idx)}>
+        <Trash2 className="w-3.5 h-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 export default function SkuDetail({ id }: { id: string }) {
   const skuId = parseInt(id, 10);
   const qc = useQueryClient();
@@ -252,6 +305,9 @@ export default function SkuDetail({ id }: { id: string }) {
   const [editingSpec, setEditingSpec] = useState<string | null>(null);
   const [specDraft, setSpecDraft] = useState<Record<string, any>>({});
   const [savingSpec, setSavingSpec] = useState(false);
+
+  // Drag-to-reorder sensors for ingredient list
+  const ingredientSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   function startEditSpec(section: string) {
     const s = sku as any;
@@ -1652,32 +1708,45 @@ export default function SkuDetail({ id }: { id: string }) {
                       return <span className={`text-xs font-mono ${Math.abs(total - 100) < 0.01 ? "text-green-600" : "text-muted-foreground"}`}>{total.toFixed(1)}% total</span>;
                     })()}
                   </div>
-                  {(specDraft.ingredientLines ?? []).map((row: any, idx: number) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <Input
-                        className="flex-1"
-                        placeholder="ชื่อไทย / English name"
-                        value={row.name}
-                        onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], name: e.target.value }; return { ...p, ingredientLines: rows }; })}
-                      />
-                      <div className="flex items-center gap-1 w-24 flex-shrink-0">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.1}
-                          placeholder="%"
-                          value={row.percentage === 0 && row.name === "" ? "" : row.percentage}
-                          onChange={e => setSpecDraft(p => { const rows = [...(p.ingredientLines ?? [])]; rows[idx] = { ...rows[idx], percentage: parseFloat(e.target.value) || 0 }; return { ...p, ingredientLines: rows }; })}
-                          className="text-right"
-                        />
-                        <span className="text-sm text-muted-foreground">%</span>
-                      </div>
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive flex-shrink-0" onClick={() => setSpecDraft(p => ({ ...p, ingredientLines: (p.ingredientLines ?? []).filter((_: any, i: number) => i !== idx) }))}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+                  {(() => {
+                    const ingredientRows: any[] = specDraft.ingredientLines ?? [];
+                    const rowIds = ingredientRows.map((_: any, i: number) => `ingredient-${i}`);
+                    const handleDragEnd = (event: DragEndEvent) => {
+                      const { active, over } = event;
+                      if (!over || active.id === over.id) return;
+                      const oldIndex = rowIds.indexOf(active.id as string);
+                      const newIndex = rowIds.indexOf(over.id as string);
+                      setSpecDraft(p => ({ ...p, ingredientLines: arrayMove(p.ingredientLines ?? [], oldIndex, newIndex) }));
+                    };
+                    const handleChange = (idx: number, field: "name" | "percentage", value: string) => {
+                      setSpecDraft(p => {
+                        const rows = [...(p.ingredientLines ?? [])];
+                        rows[idx] = { ...rows[idx], [field]: field === "percentage" ? (parseFloat(value) || 0) : value };
+                        return { ...p, ingredientLines: rows };
+                      });
+                    };
+                    const handleRemove = (idx: number) => {
+                      setSpecDraft(p => ({ ...p, ingredientLines: (p.ingredientLines ?? []).filter((_: any, i: number) => i !== idx) }));
+                    };
+                    return (
+                      <DndContext sensors={ingredientSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
+                          <div className="space-y-2">
+                            {ingredientRows.map((row: any, idx: number) => (
+                              <SortableIngredientRow
+                                key={`ingredient-${idx}`}
+                                id={`ingredient-${idx}`}
+                                row={row}
+                                idx={idx}
+                                onChange={handleChange}
+                                onRemove={handleRemove}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    );
+                  })()}
                   <Button variant="outline" size="sm" className="w-full" onClick={() => setSpecDraft(p => ({ ...p, ingredientLines: [...(p.ingredientLines ?? []), { name: "", percentage: 0 }] }))}>
                     <Plus className="w-3.5 h-3.5 mr-1" />Add ingredient
                   </Button>
