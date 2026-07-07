@@ -707,6 +707,11 @@ export default function SkuDetail({ id }: { id: string }) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
+      const newLine = await res.json();
+      qc.setQueryData(getGetSkuQueryKey(skuId), (old: any) => {
+        if (!old) return old;
+        return { ...old, costLines: [...(old.costLines ?? []), newLine] };
+      });
       setIsAddLineOpen(false);
       addLineForm.reset();
       setAddDisplayUnit("kg");
@@ -733,6 +738,14 @@ export default function SkuDetail({ id }: { id: string }) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
+      const updatedLine = await res.json();
+      qc.setQueryData(getGetSkuQueryKey(skuId), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          costLines: (old.costLines ?? []).map((l: any) => l.id === updatedLine.id ? updatedLine : l),
+        };
+      });
       setEditingLine(null);
       qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
       toast({ title: "Cost line updated" });
