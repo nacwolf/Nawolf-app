@@ -108,7 +108,12 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
       .from(costLinesTable)
       .where(eq(costLinesTable.skuId, skuId));
   } catch {
-    return { totalCogs: null, grossMargin: null };
+    // packaging_item_id column not yet migrated — fall back to ingredient-only
+    const rows = await db
+      .select({ ingredientId: costLinesTable.ingredientId, quantityPerUnit: costLinesTable.quantityPerUnit })
+      .from(costLinesTable)
+      .where(eq(costLinesTable.skuId, skuId));
+    costLines = rows.map(r => ({ ...r, packagingItemId: null }));
   }
 
   const [prodConfig] = await db

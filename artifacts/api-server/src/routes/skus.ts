@@ -135,7 +135,24 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
       .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
       .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
       .where(eq(costLinesTable.skuId, sku.id));
-  } catch { /* column may not exist yet before migration */ }
+  } catch {
+    // packaging_item_id column doesn't exist yet — fall back to ingredient-only query
+    const rows = await db
+      .select({
+        id: costLinesTable.id,
+        skuId: costLinesTable.skuId,
+        ingredientId: costLinesTable.ingredientId,
+        ingredientName: ingredientsTable.name,
+        ingredientUnit: ingredientsTable.unit,
+        ingredientCategory: ingredientsTable.category,
+        quantityPerUnit: costLinesTable.quantityPerUnit,
+        notes: costLinesTable.notes,
+      })
+      .from(costLinesTable)
+      .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+      .where(eq(costLinesTable.skuId, sku.id));
+    costLinesRows = rows.map(r => ({ ...r, packagingItemId: null, packagingUnitCost: null }));
+  }
 
   const costLinesWithPrice = await Promise.all(
     costLinesRows.map(async (line) => {
@@ -321,7 +338,23 @@ router.get("/skus/:id/cost-lines", requireAuth, async (req, res): Promise<void> 
       .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
       .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
       .where(eq(costLinesTable.skuId, params.data.id));
-  } catch { /* column may not exist yet before migration */ }
+  } catch {
+    const rows = await db
+      .select({
+        id: costLinesTable.id,
+        skuId: costLinesTable.skuId,
+        ingredientId: costLinesTable.ingredientId,
+        ingredientName: ingredientsTable.name,
+        ingredientUnit: ingredientsTable.unit,
+        ingredientCategory: ingredientsTable.category,
+        quantityPerUnit: costLinesTable.quantityPerUnit,
+        notes: costLinesTable.notes,
+      })
+      .from(costLinesTable)
+      .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+      .where(eq(costLinesTable.skuId, params.data.id));
+    lines = rows.map(r => ({ ...r, packagingItemId: null, packagingUnitCost: null }));
+  }
 
   const result = await Promise.all(
     lines.map(async (line) => {
