@@ -109,26 +109,33 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { totalCogs, grossMargin } = await recalculateSkuCogs(sku.id);
+  let totalCogs: number | null = null;
+  let grossMargin: number | null = null;
+  try {
+    ({ totalCogs, grossMargin } = await recalculateSkuCogs(sku.id));
+  } catch { /* column may not exist yet before migration */ }
   const status = computeMarginStatus(grossMargin);
 
-  const costLinesRows = await db
-    .select({
-      id: costLinesTable.id,
-      skuId: costLinesTable.skuId,
-      ingredientId: costLinesTable.ingredientId,
-      packagingItemId: costLinesTable.packagingItemId,
-      ingredientName: sql<string>`COALESCE(${ingredientsTable.name}, ${packagingItemsTable.nameEnglish})`.as("ingredient_name"),
-      ingredientUnit: sql<string>`COALESCE(${ingredientsTable.unit}, ${packagingItemsTable.unit})`.as("ingredient_unit"),
-      ingredientCategory: sql<string>`COALESCE(${ingredientsTable.category}, 'Packaging')`.as("ingredient_category"),
-      packagingUnitCost: packagingItemsTable.unitCost,
-      quantityPerUnit: costLinesTable.quantityPerUnit,
-      notes: costLinesTable.notes,
-    })
-    .from(costLinesTable)
-    .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
-    .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
-    .where(eq(costLinesTable.skuId, sku.id));
+  let costLinesRows: any[] = [];
+  try {
+    costLinesRows = await db
+      .select({
+        id: costLinesTable.id,
+        skuId: costLinesTable.skuId,
+        ingredientId: costLinesTable.ingredientId,
+        packagingItemId: costLinesTable.packagingItemId,
+        ingredientName: sql<string>`COALESCE(${ingredientsTable.name}, ${packagingItemsTable.nameEnglish})`.as("ingredient_name"),
+        ingredientUnit: sql<string>`COALESCE(${ingredientsTable.unit}, ${packagingItemsTable.unit})`.as("ingredient_unit"),
+        ingredientCategory: sql<string>`COALESCE(${ingredientsTable.category}, 'Packaging')`.as("ingredient_category"),
+        packagingUnitCost: packagingItemsTable.unitCost,
+        quantityPerUnit: costLinesTable.quantityPerUnit,
+        notes: costLinesTable.notes,
+      })
+      .from(costLinesTable)
+      .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+      .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
+      .where(eq(costLinesTable.skuId, sku.id));
+  } catch { /* column may not exist yet before migration */ }
 
   const costLinesWithPrice = await Promise.all(
     costLinesRows.map(async (line) => {
@@ -295,23 +302,26 @@ router.get("/skus/:id/cost-lines", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
-  const lines = await db
-    .select({
-      id: costLinesTable.id,
-      skuId: costLinesTable.skuId,
-      ingredientId: costLinesTable.ingredientId,
-      packagingItemId: costLinesTable.packagingItemId,
-      ingredientName: sql<string>`COALESCE(${ingredientsTable.name}, ${packagingItemsTable.nameEnglish})`.as("ingredient_name"),
-      ingredientUnit: sql<string>`COALESCE(${ingredientsTable.unit}, ${packagingItemsTable.unit})`.as("ingredient_unit"),
-      ingredientCategory: sql<string>`COALESCE(${ingredientsTable.category}, 'Packaging')`.as("ingredient_category"),
-      packagingUnitCost: packagingItemsTable.unitCost,
-      quantityPerUnit: costLinesTable.quantityPerUnit,
-      notes: costLinesTable.notes,
-    })
-    .from(costLinesTable)
-    .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
-    .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
-    .where(eq(costLinesTable.skuId, params.data.id));
+  let lines: any[] = [];
+  try {
+    lines = await db
+      .select({
+        id: costLinesTable.id,
+        skuId: costLinesTable.skuId,
+        ingredientId: costLinesTable.ingredientId,
+        packagingItemId: costLinesTable.packagingItemId,
+        ingredientName: sql<string>`COALESCE(${ingredientsTable.name}, ${packagingItemsTable.nameEnglish})`.as("ingredient_name"),
+        ingredientUnit: sql<string>`COALESCE(${ingredientsTable.unit}, ${packagingItemsTable.unit})`.as("ingredient_unit"),
+        ingredientCategory: sql<string>`COALESCE(${ingredientsTable.category}, 'Packaging')`.as("ingredient_category"),
+        packagingUnitCost: packagingItemsTable.unitCost,
+        quantityPerUnit: costLinesTable.quantityPerUnit,
+        notes: costLinesTable.notes,
+      })
+      .from(costLinesTable)
+      .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+      .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
+      .where(eq(costLinesTable.skuId, params.data.id));
+  } catch { /* column may not exist yet before migration */ }
 
   const result = await Promise.all(
     lines.map(async (line) => {
@@ -373,9 +383,15 @@ router.post("/skus/:id/cost-lines", requireAuth, async (req, res): Promise<void>
   if (ingredientId) insertValues.ingredientId = parseInt(ingredientId, 10);
   if (packagingItemId) insertValues.packagingItemId = parseInt(packagingItemId, 10);
 
-  const [line] = await db.insert(costLinesTable).values(insertValues).returning();
+  let line: any;
+  try {
+    [line] = await db.insert(costLinesTable).values(insertValues).returning();
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message ?? "Failed to insert cost line. Run the DB migration first." });
+    return;
+  }
 
-  await snapshotSku(params.data.id, "cost_line_added");
+  try { await snapshotSku(params.data.id, "cost_line_added"); } catch { /* non-blocking */ }
 
   let itemName = "";
   let itemUnit = "";
@@ -443,18 +459,24 @@ router.patch("/skus/:id/cost-lines/:costLineId", requireAuth, async (req, res): 
     updateData.ingredientId = null;
   }
 
-  const [line] = await db
-    .update(costLinesTable)
-    .set(updateData)
-    .where(eq(costLinesTable.id, costLineId))
-    .returning();
+  let line: any;
+  try {
+    [line] = await db
+      .update(costLinesTable)
+      .set(updateData)
+      .where(eq(costLinesTable.id, costLineId))
+      .returning();
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message ?? "Failed to update cost line. Run the DB migration first." });
+    return;
+  }
 
   if (!line) {
     res.status(404).json({ error: "Cost line not found" });
     return;
   }
 
-  await snapshotSku(skuId, "cost_line_updated");
+  try { await snapshotSku(skuId, "cost_line_updated"); } catch { /* non-blocking */ }
 
   let itemName = "";
   let itemUnit = "";

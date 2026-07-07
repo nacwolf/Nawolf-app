@@ -97,14 +97,19 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
   const sku = await db.select().from(skusTable).where(eq(skusTable.id, skuId)).limit(1);
   if (!sku[0]) return { totalCogs: null, grossMargin: null };
 
-  const costLines = await db
-    .select({
-      ingredientId: costLinesTable.ingredientId,
-      packagingItemId: costLinesTable.packagingItemId,
-      quantityPerUnit: costLinesTable.quantityPerUnit,
-    })
-    .from(costLinesTable)
-    .where(eq(costLinesTable.skuId, skuId));
+  let costLines: { ingredientId: number | null; packagingItemId: number | null; quantityPerUnit: string }[] = [];
+  try {
+    costLines = await db
+      .select({
+        ingredientId: costLinesTable.ingredientId,
+        packagingItemId: costLinesTable.packagingItemId,
+        quantityPerUnit: costLinesTable.quantityPerUnit,
+      })
+      .from(costLinesTable)
+      .where(eq(costLinesTable.skuId, skuId));
+  } catch {
+    return { totalCogs: null, grossMargin: null };
+  }
 
   const [prodConfig] = await db
     .select({ laborCostPerUnit: skuProductionConfigTable.laborCostPerUnit, overheadCostPerUnit: skuProductionConfigTable.overheadCostPerUnit })
