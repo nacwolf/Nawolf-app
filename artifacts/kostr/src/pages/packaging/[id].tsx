@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -131,9 +131,42 @@ async function uploadFileToStorage(file: File): Promise<{ objectPath: string; co
 
 export default function PackagingDetail({ id }: { id: string }) {
   const [, setLocation] = useLocation();
+  const itemId = parseInt(id, 10);
+
+  const { data: item, isLoading } = useQuery<PackagingItem>({
+    queryKey: ["/api/packaging", itemId],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl(`/packaging/${itemId}`));
+      if (!r.ok) throw new Error("Not found");
+      return r.json();
+    },
+    enabled: !isNaN(itemId),
+  });
+
+  if (isNaN(itemId)) return <div className="text-destructive">Invalid ID</div>;
+
+  if (isLoading) return (
+    <div className="space-y-4 max-w-3xl">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+
+  if (!item) return (
+    <div className="text-center py-16">
+      <p className="text-muted-foreground">Packaging item not found.</p>
+      <Button variant="outline" className="mt-4" onClick={() => setLocation("/packaging")}>Back to Packaging</Button>
+    </div>
+  );
+
+  return <PackagingDetailForm item={item} />;
+}
+
+function PackagingDetailForm({ item }: { item: PackagingItem }) {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const itemId = parseInt(id, 10);
+  const itemId = item.id;
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -146,24 +179,9 @@ export default function PackagingDetail({ id }: { id: string }) {
   const [specDocFile, setSpecDocFile] = useState<File | null>(null);
   const [removingSpecDoc, setRemovingSpecDoc] = useState(false);
 
-  const { data: item, isLoading } = useQuery<PackagingItem>({
-    queryKey: ["/api/packaging", itemId],
-    queryFn: async () => {
-      const r = await fetch(getApiUrl(`/packaging/${itemId}`));
-      if (!r.ok) throw new Error("Not found");
-      return r.json();
-    },
-    enabled: !isNaN(itemId),
-  });
-
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { nameEnglish: "", nameThai: "", category: "", supplier: "", unit: "piece", unitCost: 0, notes: "", specContainsFdaInfo: false },
-  });
-
-  useEffect(() => {
-    if (!item) return;
-    form.reset({
+    defaultValues: {
       nameEnglish: item.nameEnglish,
       nameThai: item.nameThai ?? "",
       category: item.category,
@@ -173,9 +191,10 @@ export default function PackagingDetail({ id }: { id: string }) {
       moq: item.moq ?? undefined,
       leadTimeDays: item.leadTimeDays ?? undefined,
       notes: item.notes ?? "",
+      specContainsFdaInfo: false,
       ...specsToFormData(item.specs),
-    });
-  }, [item]);
+    },
+  });
 
   const category = form.watch("category");
   const totalBlockCost = form.watch("specTotalBlockCost");
@@ -322,22 +341,6 @@ export default function PackagingDetail({ id }: { id: string }) {
       setIsDeleting(false);
     }
   }
-
-  if (isNaN(itemId)) return <div className="text-destructive">Invalid ID</div>;
-
-  if (isLoading) return (
-    <div className="space-y-4 max-w-3xl">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
-
-  if (!item) return (
-    <div className="text-center py-16">
-      <p className="text-muted-foreground">Packaging item not found.</p>
-      <Button variant="outline" className="mt-4" onClick={() => setLocation("/packaging")}>Back to Packaging</Button>
-    </div>
-  );
 
   const currentPhotoUrl = item.photoObjectPath ? getApiUrl(`/storage/objects${item.photoObjectPath.replace(/^\/objects/, "")}`) : null;
   const currentQuotationUrl = (item as any).quotationObjectPath ? getApiUrl(`/storage/objects${(item as any).quotationObjectPath.replace(/^\/objects/, "")}`) : null;
