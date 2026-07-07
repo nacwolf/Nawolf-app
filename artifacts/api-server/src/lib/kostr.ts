@@ -1,4 +1,4 @@
-import { db, ingredientsTable, ingredientPricesTable, skusTable, costLinesTable, skuSnapshotsTable } from "@workspace/db";
+import { db, ingredientsTable, ingredientPricesTable, skusTable, costLinesTable, skuSnapshotsTable, packagingItemsTable } from "@workspace/db";
 import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable, overheadItemsTable, appSettingsTable, productionConfigHistoryTable } from "@workspace/db";
 import { printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
 import { eq, desc, sql, inArray, and } from "drizzle-orm";
@@ -100,6 +100,7 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
   const costLines = await db
     .select({
       ingredientId: costLinesTable.ingredientId,
+      packagingItemId: costLinesTable.packagingItemId,
       quantityPerUnit: costLinesTable.quantityPerUnit,
     })
     .from(costLinesTable)
@@ -128,9 +129,16 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
 
   let totalCogs = 0;
   for (const line of costLines) {
-    const price = await getCurrentPrice(line.ingredientId);
-    if (price === null) return { totalCogs: null, grossMargin: null };
-    totalCogs += price * parseFloat(line.quantityPerUnit);
+    const qty = parseFloat(line.quantityPerUnit);
+    if (line.packagingItemId != null) {
+      const [pkg] = await db.select({ unitCost: packagingItemsTable.unitCost }).from(packagingItemsTable).where(eq(packagingItemsTable.id, line.packagingItemId)).limit(1);
+      if (!pkg) return { totalCogs: null, grossMargin: null };
+      totalCogs += parseFloat(pkg.unitCost) * qty;
+    } else if (line.ingredientId != null) {
+      const price = await getCurrentPrice(line.ingredientId);
+      if (price === null) return { totalCogs: null, grossMargin: null };
+      totalCogs += price * qty;
+    }
   }
 
   if (laborCost !== null) totalCogs += laborCost;

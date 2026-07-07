@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/queryClient";
 import { useListIngredientSubcategories } from "@workspace/api-client-react";
 import { SubCategoryCombobox } from "@/components/SubCategoryCombobox";
+import { useQuery } from "@tanstack/react-query";
 
 const INGREDIENT_CATEGORIES = ["Raw Materials", "Packaging", "Quality & Compliance", "Delivery"] as const;
 const UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
@@ -50,6 +51,13 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const { data: subcategoryOptions = [] } = useListIngredientSubcategories();
+  const { data: categoryOptions = [] } = useQuery<string[]>({
+    queryKey: ["/api/ingredients/categories"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/ingredients/categories"));
+      return r.json();
+    },
+  });
 
   const form = useForm<FormData>({
     resolver: zodResolver(newIngredientSchema),
@@ -202,12 +210,14 @@ export default function NewIngredient({ initialCategory }: { initialCategory?: s
                 <FormField control={form.control} name="category" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        {INGREDIENT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SubCategoryCombobox
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        options={categoryOptions}
+                        placeholder="e.g. Raw Materials"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

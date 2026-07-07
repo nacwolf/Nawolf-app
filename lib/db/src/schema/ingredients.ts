@@ -69,3 +69,16 @@ export type IngredientAttachment = typeof ingredientAttachmentsTable.$inferSelec
 export const insertIngredientTierPriceHistorySchema = createInsertSchema(ingredientTierPriceHistoryTable).omit({ id: true, changedAt: true });
 export type InsertIngredientTierPriceHistory = z.infer<typeof insertIngredientTierPriceHistorySchema>;
 export type IngredientTierPriceHistory = typeof ingredientTierPriceHistoryTable.$inferSelect;
+
+export const ingredientComponentsTable = pgTable("ingredient_components", {
+  id: serial("id").primaryKey(),
+  parentIngredientId: integer("parent_ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  childIngredientId: integer("child_ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
+  unit: text("unit").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type IngredientComponent = typeof ingredientComponentsTable.$inferSelect;
+export type InsertIngredientComponent = typeof ingredientComponentsTable.$inferInsert;

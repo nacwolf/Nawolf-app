@@ -9,6 +9,7 @@ import {
   skuSnapshotsTable,
   ingredientAttachmentsTable,
   ingredientTierPriceHistoryTable,
+  ingredientComponentsTable,
 } from "@workspace/db";
 import {
   CreateIngredientBody,
@@ -132,6 +133,14 @@ router.post("/ingredients", requireAuth, async (req, res): Promise<void> => {
     priceTier1: ingredient.priceTier1 ? parseFloat(ingredient.priceTier1) : null,
     priceTier2: ingredient.priceTier2 ? parseFloat(ingredient.priceTier2) : null,
   });
+});
+
+router.get("/ingredients/categories", requireAuth, async (_req, res): Promise<void> => {
+  const rows = await db
+    .selectDistinct({ category: ingredientsTable.category })
+    .from(ingredientsTable)
+    .orderBy(ingredientsTable.category);
+  res.json(rows.map(r => r.category).filter(Boolean));
 });
 
 router.get("/ingredients/subcategories", requireAuth, async (_req, res): Promise<void> => {
@@ -271,7 +280,6 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
 
   const auth = getAuth(req);
 
-  const ALLOWED_CATEGORIES = ["Raw Materials", "Packaging", "Quality & Compliance", "Delivery"] as const;
   const ALLOWED_UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
 
   interface PatchBody {
@@ -294,8 +302,8 @@ router.patch("/ingredients/:id", requireAuth, async (req, res): Promise<void> =>
     res.status(400).json({ error: "Name cannot be empty" });
     return;
   }
-  if (body.category !== undefined && !(ALLOWED_CATEGORIES as readonly string[]).includes(body.category)) {
-    res.status(400).json({ error: `category must be one of: ${ALLOWED_CATEGORIES.join(", ")}` });
+  if (body.category !== undefined && (typeof body.category !== "string" || !body.category.trim())) {
+    res.status(400).json({ error: "category cannot be empty" });
     return;
   }
   if (body.unit !== undefined && !(ALLOWED_UNITS as readonly string[]).includes(body.unit)) {
@@ -655,6 +663,59 @@ router.delete("/ingredients/:id/attachments/:attachmentId", requireAuth, async (
     res.status(403).json({ error: "Attachment does not belong to this ingredient" });
     return;
   }
+  res.json({ success: true });
+});
+
+router.get("/ingredients/:id/components", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const rows = await db
+    .select({
+      id: ingredientComponentsTable.id,
+      childIngredientId: ingredientComponentsTable.childIngredientId,
+      quantity: ingredientComponentsTable.quantity,
+      unit: ingredientComponentsTable.unit,
+      notes: ingredientComponentsTable.notes,
+      childName: ingredientsTable.name,
+      childUnit: ingredientsTable.unit,
+    })
+    .from(ingredientComponentsTable)
+    .innerJoin(ingredientsTable, eq(ingredientsTable.id, ingredientComponentsTable.childIngredientId))
+    .where(eq(ingredientComponentsTable.parentIngredientId, id))
+    .orderBy(ingredientComponentsTable.id);
+  res.json(rows.map(r => ({ ...r, quantity: parseFloat(r.quantity) })));
+});
+
+router.post("/ingredients/:id/components", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { childIngredientId, quantity, unit, notes } = req.body as { childIngredientId?: number; quantity?: number; unit?: string; notes?: string };
+  if (!childIngredientId || typeof childIngredientId !== "number") { res.status(400).json({ error: "childIngredientId required" }); return; }
+  if (!quantity || typeof quantity !== "number" || quantity <= 0) { res.status(400).json({ error: "quantity must be > 0" }); return; }
+  if (!unit || typeof unit !== "string" || !unit.trim()) { res.status(400).json({ error: "unit required" }); return; }
+  if (childIngredientId === id) { res.status(400).json({ error: "An ingredient cannot be a sub-ingredient of itself" }); return; }
+  const [parent] = await db.select({ id: ingredientsTable.id }).from(ingredientsTable).where(eq(ingredientsTable.id, id));
+  if (!parent) { res.status(404).json({ error: "Ingredient not found" }); return; }
+  const [child] = await db.select({ id: ingredientsTable.id }).from(ingredientsTable).where(eq(ingredientsTable.id, childIngredientId));
+  if (!child) { res.status(404).json({ error: "Sub-ingredient not found" }); return; }
+  const [row] = await db.insert(ingredientComponentsTable).values({
+    parentIngredientId: id,
+    childIngredientId,
+    quantity: quantity.toFixed(4),
+    unit: unit.trim(),
+    notes: notes?.trim() || null,
+  }).returning();
+  res.status(201).json({ ...row, quantity: parseFloat(row.quantity) });
+});
+
+router.delete("/ingredients/:id/components/:componentId", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const componentId = parseInt(req.params.componentId, 10);
+  if (isNaN(id) || isNaN(componentId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [deleted] = await db.delete(ingredientComponentsTable)
+    .where(eq(ingredientComponentsTable.id, componentId))
+    .returning();
+  if (!deleted || deleted.parentIngredientId !== id) { res.status(404).json({ error: "Component not found" }); return; }
   res.json({ success: true });
 });
 

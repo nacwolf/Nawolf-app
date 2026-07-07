@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, max, sql } from "drizzle-orm";
-import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable, skuProductPhotosTable, skuCertificateFilesTable } from "@workspace/db";
+import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable, skuProductPhotosTable, skuCertificateFilesTable, packagingItemsTable } from "@workspace/db";
 import {
   CreateSkuBody,
   GetSkuParams,
@@ -117,29 +117,44 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
       id: costLinesTable.id,
       skuId: costLinesTable.skuId,
       ingredientId: costLinesTable.ingredientId,
-      ingredientName: ingredientsTable.name,
-      ingredientUnit: ingredientsTable.unit,
-      ingredientCategory: ingredientsTable.category,
+      packagingItemId: costLinesTable.packagingItemId,
+      ingredientName: sql<string>`COALESCE(${ingredientsTable.name}, ${packagingItemsTable.nameEnglish})`.as("ingredient_name"),
+      ingredientUnit: sql<string>`COALESCE(${ingredientsTable.unit}, ${packagingItemsTable.unit})`.as("ingredient_unit"),
+      ingredientCategory: sql<string>`COALESCE(${ingredientsTable.category}, 'Packaging')`.as("ingredient_category"),
+      packagingUnitCost: packagingItemsTable.unitCost,
       quantityPerUnit: costLinesTable.quantityPerUnit,
       notes: costLinesTable.notes,
     })
     .from(costLinesTable)
-    .innerJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+    .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+    .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
     .where(eq(costLinesTable.skuId, sku.id));
 
   const costLinesWithPrice = await Promise.all(
     costLinesRows.map(async (line) => {
-      const priceRows = await db
-        .select({ price: ingredientPricesTable.price })
-        .from(ingredientPricesTable)
-        .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
-        .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-        .limit(1);
-      const currentPrice = priceRows[0] ? parseFloat(priceRows[0].price) : null;
+      let currentPrice: number | null = null;
+      if (line.packagingItemId != null && line.packagingUnitCost != null) {
+        currentPrice = parseFloat(line.packagingUnitCost);
+      } else if (line.ingredientId != null) {
+        const priceRows = await db
+          .select({ price: ingredientPricesTable.price })
+          .from(ingredientPricesTable)
+          .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
+          .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
+          .limit(1);
+        currentPrice = priceRows[0] ? parseFloat(priceRows[0].price) : null;
+      }
       const qty = parseFloat(line.quantityPerUnit);
       return {
-        ...line,
+        id: line.id,
+        skuId: line.skuId,
+        ingredientId: line.ingredientId,
+        packagingItemId: line.packagingItemId,
+        ingredientName: line.ingredientName,
+        ingredientUnit: line.ingredientUnit,
+        ingredientCategory: line.ingredientCategory,
         quantityPerUnit: qty,
+        notes: line.notes,
         currentPrice,
         lineCost: currentPrice != null ? currentPrice * qty : null,
       };
@@ -285,28 +300,44 @@ router.get("/skus/:id/cost-lines", requireAuth, async (req, res): Promise<void> 
       id: costLinesTable.id,
       skuId: costLinesTable.skuId,
       ingredientId: costLinesTable.ingredientId,
-      ingredientName: ingredientsTable.name,
-      ingredientUnit: ingredientsTable.unit,
+      packagingItemId: costLinesTable.packagingItemId,
+      ingredientName: sql<string>`COALESCE(${ingredientsTable.name}, ${packagingItemsTable.nameEnglish})`.as("ingredient_name"),
+      ingredientUnit: sql<string>`COALESCE(${ingredientsTable.unit}, ${packagingItemsTable.unit})`.as("ingredient_unit"),
+      ingredientCategory: sql<string>`COALESCE(${ingredientsTable.category}, 'Packaging')`.as("ingredient_category"),
+      packagingUnitCost: packagingItemsTable.unitCost,
       quantityPerUnit: costLinesTable.quantityPerUnit,
       notes: costLinesTable.notes,
     })
     .from(costLinesTable)
-    .innerJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+    .leftJoin(ingredientsTable, eq(costLinesTable.ingredientId, ingredientsTable.id))
+    .leftJoin(packagingItemsTable, eq(costLinesTable.packagingItemId, packagingItemsTable.id))
     .where(eq(costLinesTable.skuId, params.data.id));
 
   const result = await Promise.all(
     lines.map(async (line) => {
-      const priceRows = await db
-        .select({ price: ingredientPricesTable.price })
-        .from(ingredientPricesTable)
-        .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
-        .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-        .limit(1);
-      const currentPrice = priceRows[0] ? parseFloat(priceRows[0].price) : null;
+      let currentPrice: number | null = null;
+      if (line.packagingItemId != null && line.packagingUnitCost != null) {
+        currentPrice = parseFloat(line.packagingUnitCost);
+      } else if (line.ingredientId != null) {
+        const priceRows = await db
+          .select({ price: ingredientPricesTable.price })
+          .from(ingredientPricesTable)
+          .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
+          .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
+          .limit(1);
+        currentPrice = priceRows[0] ? parseFloat(priceRows[0].price) : null;
+      }
       const qty = parseFloat(line.quantityPerUnit);
       return {
-        ...line,
+        id: line.id,
+        skuId: line.skuId,
+        ingredientId: line.ingredientId,
+        packagingItemId: line.packagingItemId,
+        ingredientName: line.ingredientName,
+        ingredientUnit: line.ingredientUnit,
+        ingredientCategory: line.ingredientCategory,
         quantityPerUnit: qty,
+        notes: line.notes,
         currentPrice,
         lineCost: currentPrice != null ? currentPrice * qty : null,
       };
@@ -323,42 +354,63 @@ router.post("/skus/:id/cost-lines", requireAuth, async (req, res): Promise<void>
     return;
   }
 
-  const parsed = AddSkuCostLineBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const { ingredientId, packagingItemId, quantityPerUnit, notes } = req.body;
+  const qty = parseFloat(quantityPerUnit);
+  if (isNaN(qty) || qty <= 0) {
+    res.status(400).json({ error: "quantityPerUnit must be a positive number" });
+    return;
+  }
+  if (!ingredientId && !packagingItemId) {
+    res.status(400).json({ error: "Either ingredientId or packagingItemId is required" });
     return;
   }
 
-  const [line] = await db
-    .insert(costLinesTable)
-    .values({
-      skuId: params.data.id,
-      ingredientId: parsed.data.ingredientId,
-      quantityPerUnit: parsed.data.quantityPerUnit.toFixed(4),
-      notes: parsed.data.notes ?? null,
-    })
-    .returning();
+  const insertValues: any = {
+    skuId: params.data.id,
+    quantityPerUnit: qty.toFixed(4),
+    notes: notes ?? null,
+  };
+  if (ingredientId) insertValues.ingredientId = parseInt(ingredientId, 10);
+  if (packagingItemId) insertValues.packagingItemId = parseInt(packagingItemId, 10);
+
+  const [line] = await db.insert(costLinesTable).values(insertValues).returning();
 
   await snapshotSku(params.data.id, "cost_line_added");
 
-  const ingredient = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, line.ingredientId)).limit(1);
-  const priceRows = await db
-    .select({ price: ingredientPricesTable.price })
-    .from(ingredientPricesTable)
-    .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
-    .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-    .limit(1);
+  let itemName = "";
+  let itemUnit = "";
+  let itemCategory = "";
+  let currentPrice: number | null = null;
 
-  const currentPrice = priceRows[0] ? parseFloat(priceRows[0].price) : null;
-  const qty = parseFloat(line.quantityPerUnit);
+  if (line.packagingItemId != null) {
+    const [pkg] = await db.select().from(packagingItemsTable).where(eq(packagingItemsTable.id, line.packagingItemId)).limit(1);
+    itemName = pkg?.nameEnglish ?? "";
+    itemUnit = pkg?.unit ?? "";
+    itemCategory = "Packaging";
+    currentPrice = pkg ? parseFloat(pkg.unitCost) : null;
+  } else if (line.ingredientId != null) {
+    const [ing] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, line.ingredientId)).limit(1);
+    itemName = ing?.name ?? "";
+    itemUnit = ing?.unit ?? "";
+    itemCategory = ing?.category ?? "";
+    const [priceRow] = await db
+      .select({ price: ingredientPricesTable.price })
+      .from(ingredientPricesTable)
+      .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
+      .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
+      .limit(1);
+    currentPrice = priceRow ? parseFloat(priceRow.price) : null;
+  }
 
+  const storedQty = parseFloat(line.quantityPerUnit);
   res.status(201).json({
     ...line,
-    ingredientName: ingredient[0]?.name ?? "",
-    ingredientUnit: ingredient[0]?.unit ?? "",
-    quantityPerUnit: qty,
+    ingredientName: itemName,
+    ingredientUnit: itemUnit,
+    ingredientCategory: itemCategory,
+    quantityPerUnit: storedQty,
     currentPrice,
-    lineCost: currentPrice != null ? currentPrice * qty : null,
+    lineCost: currentPrice != null ? currentPrice * storedQty : null,
   });
 });
 
@@ -371,7 +423,7 @@ router.patch("/skus/:id/cost-lines/:costLineId", requireAuth, async (req, res): 
     return;
   }
 
-  const { ingredientId, quantityPerUnit, notes } = req.body;
+  const { ingredientId, packagingItemId, quantityPerUnit, notes } = req.body;
   const qty = parseFloat(quantityPerUnit);
   if (isNaN(qty) || qty <= 0) {
     res.status(400).json({ error: "quantityPerUnit must be a positive number" });
@@ -384,6 +436,11 @@ router.patch("/skus/:id/cost-lines/:costLineId", requireAuth, async (req, res): 
   };
   if (ingredientId != null && !isNaN(parseInt(ingredientId, 10))) {
     updateData.ingredientId = parseInt(ingredientId, 10);
+    updateData.packagingItemId = null;
+  }
+  if (packagingItemId != null && !isNaN(parseInt(packagingItemId, 10))) {
+    updateData.packagingItemId = parseInt(packagingItemId, 10);
+    updateData.ingredientId = null;
   }
 
   const [line] = await db
@@ -399,22 +456,37 @@ router.patch("/skus/:id/cost-lines/:costLineId", requireAuth, async (req, res): 
 
   await snapshotSku(skuId, "cost_line_updated");
 
-  const [ingredient] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, line.ingredientId)).limit(1);
-  const [priceRow] = await db
-    .select({ price: ingredientPricesTable.price })
-    .from(ingredientPricesTable)
-    .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
-    .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
-    .limit(1);
+  let itemName = "";
+  let itemUnit = "";
+  let itemCategory: string | null = null;
+  let currentPrice: number | null = null;
 
-  const currentPrice = priceRow ? parseFloat(priceRow.price) : null;
+  if (line.packagingItemId != null) {
+    const [pkg] = await db.select().from(packagingItemsTable).where(eq(packagingItemsTable.id, line.packagingItemId)).limit(1);
+    itemName = pkg?.nameEnglish ?? "";
+    itemUnit = pkg?.unit ?? "";
+    itemCategory = "Packaging";
+    currentPrice = pkg ? parseFloat(pkg.unitCost) : null;
+  } else if (line.ingredientId != null) {
+    const [ingredient] = await db.select().from(ingredientsTable).where(eq(ingredientsTable.id, line.ingredientId)).limit(1);
+    itemName = ingredient?.name ?? "";
+    itemUnit = ingredient?.unit ?? "";
+    itemCategory = ingredient?.category ?? null;
+    const [priceRow] = await db
+      .select({ price: ingredientPricesTable.price })
+      .from(ingredientPricesTable)
+      .where(eq(ingredientPricesTable.ingredientId, line.ingredientId))
+      .orderBy(desc(ingredientPricesTable.effectiveDate), desc(ingredientPricesTable.createdAt))
+      .limit(1);
+    currentPrice = priceRow ? parseFloat(priceRow.price) : null;
+  }
+
   const storedQty = parseFloat(line.quantityPerUnit);
-
   res.json({
     ...line,
-    ingredientName: ingredient?.name ?? "",
-    ingredientUnit: ingredient?.unit ?? "",
-    ingredientCategory: ingredient?.category ?? null,
+    ingredientName: itemName,
+    ingredientUnit: itemUnit,
+    ingredientCategory: itemCategory,
     quantityPerUnit: storedQty,
     currentPrice,
     lineCost: currentPrice != null ? currentPrice * storedQty : null,

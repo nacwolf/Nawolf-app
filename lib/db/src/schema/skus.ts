@@ -2,6 +2,7 @@ import { pgTable, serial, text, timestamp, numeric, integer, date, pgEnum, boole
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { ingredientsTable } from "./ingredients";
+import { packagingItemsTable } from "./packaging";
 
 export const printingBlockConfigStatusEnum = pgEnum("printing_block_config_status", ["active", "retired"]);
 
@@ -120,7 +121,8 @@ export const skuCertificateFilesTable = pgTable("sku_certificate_files", {
 export const costLinesTable = pgTable("cost_lines", {
   id: serial("id").primaryKey(),
   skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
-  ingredientId: integer("ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "restrict" }),
+  ingredientId: integer("ingredient_id").references(() => ingredientsTable.id, { onDelete: "restrict" }),
+  packagingItemId: integer("packaging_item_id").references(() => packagingItemsTable.id, { onDelete: "restrict" }),
   quantityPerUnit: numeric("quantity_per_unit", { precision: 12, scale: 4 }).notNull(),
   notes: text("notes"),
 });

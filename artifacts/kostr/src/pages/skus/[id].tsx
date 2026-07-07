@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { useGetSku, useUpdateSku, useAddSkuCostLine, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey } from "@workspace/api-client-react";
+import { useGetSku, useUpdateSku, useDeleteSkuCostLine, useListIngredients, getGetSkuQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatCurrency, formatPercent, formatDate, formatDateShort } from "@/lib/format";
 import { StatusBadge } from "@/components/status-badge";
@@ -89,7 +89,7 @@ const editPriceSchema = z.object({
 });
 
 const lineSchema = z.object({
-  ingredientId: z.coerce.number().min(1, "Select an ingredient"),
+  itemId: z.coerce.number().min(1, "Select an item"),
   displayQty: z.coerce.number().min(0.000001, "Must be > 0"),
   notes: z.string().optional(),
 });
@@ -99,10 +99,12 @@ type DisplayUnit = "kg" | "g";
 
 interface EditingLine {
   id: number;
-  ingredientId: number;
+  ingredientId: number | null;
+  packagingItemId: number | null;
   quantityPerUnit: number;
   notes: string | null;
   ingredientUnit: string;
+  itemType: "ingredient" | "packaging";
 }
 
 function triggerLabel(triggeredBy: string | null): { label: string; className: string } {
@@ -137,32 +139,33 @@ function toStoredQty(displayQty: number, unit: string, displayUnit: DisplayUnit)
   return displayQty;
 }
 
-interface IngredientPickerProps {
-  ingredients: any[];
+interface ItemPickerProps {
+  items: any[];
   selectedId: number;
-  onSelect: (ing: any) => void;
+  selectedType: "ingredient" | "packaging";
+  onSelect: (item: any) => void;
 }
 
-function IngredientPicker({ ingredients, selectedId, onSelect }: IngredientPickerProps) {
+function IngredientPicker({ items, selectedId, selectedType, onSelect }: ItemPickerProps) {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return ingredients;
-    return ingredients.filter(i =>
+    if (!q) return items;
+    return items.filter(i =>
       i.name.toLowerCase().includes(q) ||
       (i.supplier || "").toLowerCase().includes(q) ||
       (i.category || "").toLowerCase().includes(q)
     );
-  }, [ingredients, search]);
+  }, [items, search]);
 
   const grouped = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const cat of CATEGORIES) {
-      const items = filtered.filter((i: any) => i.category === cat);
-      if (items.length) map[cat] = items;
+      const catItems = filtered.filter((i: any) => i.category === cat);
+      if (catItems.length) map[cat] = catItems;
     }
-    const other = filtered.filter((i: any) => !CATEGORIES.includes(i.category));
+    const other = filtered.filter((i: any) => !CATEGORIES.includes(i.category as any));
     if (other.length) map["Other"] = other;
     return map;
   }, [filtered]);
@@ -173,7 +176,7 @@ function IngredientPicker({ ingredients, selectedId, onSelect }: IngredientPicke
         <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
         <Input
           className="pl-8 h-9"
-          placeholder="Search ingredients..."
+          placeholder="Search ingredients & packaging..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           autoFocus={false}
@@ -182,32 +185,35 @@ function IngredientPicker({ ingredients, selectedId, onSelect }: IngredientPicke
       <div className="h-56 overflow-y-auto border rounded-md">
         {Object.entries(grouped).length === 0 ? (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">No results</div>
-        ) : Object.entries(grouped).map(([cat, items]) => (
+        ) : Object.entries(grouped).map(([cat, catItems]) => (
           <div key={cat}>
             <div className="sticky top-0 z-10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted border-b">
               {cat}
             </div>
-            {items.map((ing: any) => (
-              <button
-                key={ing.id}
-                type="button"
-                onClick={() => onSelect(ing)}
-                className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-accent transition-colors ${selectedId === ing.id ? "bg-primary/8" : ""}`}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    {selectedId === ing.id && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
-                    <span className={`text-sm font-medium truncate ${selectedId === ing.id ? "text-primary" : ""}`}>{ing.name}</span>
+            {catItems.map((item: any) => {
+              const isSelected = selectedId === item.id && selectedType === item._type;
+              return (
+                <button
+                  key={`${item._type}-${item.id}`}
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-accent transition-colors ${isSelected ? "bg-primary/8" : ""}`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      {isSelected && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
+                      <span className={`text-sm font-medium truncate ${isSelected ? "text-primary" : ""}`}>{item.name}</span>
+                    </div>
+                    {item.supplier && (
+                      <div className="text-xs text-muted-foreground truncate pl-5">{item.supplier}</div>
+                    )}
                   </div>
-                  {ing.supplier && (
-                    <div className="text-xs text-muted-foreground truncate pl-5">{ing.supplier}</div>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                  {ing.currentPrice != null ? formatCurrency(ing.currentPrice) : "—"}/{ing.unit}
-                </div>
-              </button>
-            ))}
+                  <div className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                    {item.currentPrice != null ? formatCurrency(item.currentPrice) : "—"}/{item.unit}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         ))}
       </div>
@@ -273,8 +279,16 @@ export default function SkuDetail({ id }: { id: string }) {
   const { data: sku, isLoading } = useGetSku(skuId, { query: { enabled: !isNaN(skuId) } });
   const { data: ingredients } = useListIngredients();
 
+  const { data: packagingItems } = useQuery<any[]>({
+    queryKey: ["/api/packaging"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/packaging"));
+      if (!r.ok) throw new Error();
+      return r.json();
+    },
+  });
+
   const updateSku = useUpdateSku();
-  const addLine = useAddSkuCostLine();
   const deleteLine = useDeleteSkuCostLine();
 
   const [isEditPriceOpen, setIsEditPriceOpen] = useState(false);
@@ -283,6 +297,8 @@ export default function SkuDetail({ id }: { id: string }) {
   const [editingLine, setEditingLine] = useState<EditingLine | null>(null);
   const [addDisplayUnit, setAddDisplayUnit] = useState<DisplayUnit>("kg");
   const [editDisplayUnit, setEditDisplayUnit] = useState<DisplayUnit>("kg");
+  const [addItemType, setAddItemType] = useState<"ingredient" | "packaging">("ingredient");
+  const [editItemType, setEditItemType] = useState<"ingredient" | "packaging">("ingredient");
   const [isSavingLine, setIsSavingLine] = useState(false);
   const [isSavingProd, setIsSavingProd] = useState(false);
   const [prodUnitsPerDay, setProdUnitsPerDay] = useState<string>("");
@@ -459,6 +475,11 @@ export default function SkuDetail({ id }: { id: string }) {
     return Object.fromEntries(ingredients.map((i: any) => [i.id, i])) as Record<number, any>;
   }, [ingredients]);
 
+  const pkgMap = useMemo(() => {
+    if (!packagingItems) return {} as Record<number, any>;
+    return Object.fromEntries(packagingItems.map((p: any) => [p.id, p])) as Record<number, any>;
+  }, [packagingItems]);
+
   const priceForm = useForm<z.infer<typeof editPriceSchema>>({
     resolver: zodResolver(editPriceSchema),
     values: { sellPrice: sku?.sellPrice || 0 }
@@ -466,18 +487,40 @@ export default function SkuDetail({ id }: { id: string }) {
 
   const addLineForm = useForm<z.infer<typeof lineSchema>>({
     resolver: zodResolver(lineSchema),
-    defaultValues: { ingredientId: 0, displayQty: 1, notes: "" }
+    defaultValues: { itemId: 0, displayQty: 1, notes: "" }
   });
 
   const editLineForm = useForm<z.infer<typeof lineSchema>>({
     resolver: zodResolver(lineSchema),
-    defaultValues: { ingredientId: 0, displayQty: 1, notes: "" }
+    defaultValues: { itemId: 0, displayQty: 1, notes: "" }
   });
 
-  const addIngId = addLineForm.watch("ingredientId");
-  const addIng = ingMap[addIngId];
-  const editIngId = editLineForm.watch("ingredientId");
-  const editIng = ingMap[editIngId];
+  const allCostItems = useMemo(() => {
+    const ingItems = (ingredients ?? []).map((i: any) => ({
+      id: i.id,
+      name: i.name,
+      unit: i.unit,
+      category: i.category || "Other",
+      currentPrice: i.currentPrice,
+      supplier: i.supplier,
+      _type: "ingredient" as const,
+    }));
+    const pkgItems = (packagingItems ?? []).map((p: any) => ({
+      id: p.id,
+      name: p.nameEnglish,
+      unit: p.unit,
+      category: "Packaging",
+      currentPrice: parseFloat(p.unitCost),
+      supplier: p.supplier,
+      _type: "packaging" as const,
+    }));
+    return [...ingItems, ...pkgItems];
+  }, [ingredients, packagingItems]);
+
+  const addItemId = addLineForm.watch("itemId");
+  const addItem = allCostItems.find(i => i.id === addItemId && i._type === addItemType);
+  const editItemId = editLineForm.watch("itemId");
+  const editItem = allCostItems.find(i => i.id === editItemId && i._type === editItemType);
 
   const { data: teamMembers } = useQuery({
     queryKey: ["team-members"],
@@ -652,12 +695,22 @@ export default function SkuDetail({ id }: { id: string }) {
   }
 
   async function onAddLineSubmit(data: z.infer<typeof lineSchema>) {
-    const storedQty = toStoredQty(data.displayQty, addIng?.unit ?? "kg", addDisplayUnit);
+    const itemUnit = addItem?.unit ?? "kg";
+    const storedQty = addItemType === "ingredient" ? toStoredQty(data.displayQty, itemUnit, addDisplayUnit) : data.displayQty;
     try {
-      await addLine.mutateAsync({ id: skuId, data: { ingredientId: data.ingredientId, quantityPerUnit: storedQty, notes: data.notes || null } });
+      const payload: any = { quantityPerUnit: storedQty, notes: data.notes || null };
+      if (addItemType === "ingredient") payload.ingredientId = data.itemId;
+      else payload.packagingItemId = data.itemId;
+      const res = await fetch(getApiUrl(`/skus/${skuId}/cost-lines`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error();
       setIsAddLineOpen(false);
       addLineForm.reset();
       setAddDisplayUnit("kg");
+      setAddItemType("ingredient");
       qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
       toast({ title: "Cost line added" });
     } catch {
@@ -667,13 +720,17 @@ export default function SkuDetail({ id }: { id: string }) {
 
   async function onEditLineSubmit(data: z.infer<typeof lineSchema>) {
     if (!editingLine) return;
-    const storedQty = toStoredQty(data.displayQty, editIng?.unit ?? editingLine.ingredientUnit, editDisplayUnit);
+    const itemUnit = editItem?.unit ?? editingLine.ingredientUnit;
+    const storedQty = editItemType === "ingredient" ? toStoredQty(data.displayQty, itemUnit, editDisplayUnit) : data.displayQty;
     setIsSavingLine(true);
     try {
+      const payload: any = { quantityPerUnit: storedQty, notes: data.notes || null };
+      if (editItemType === "ingredient") payload.ingredientId = data.itemId;
+      else payload.packagingItemId = data.itemId;
       const res = await fetch(getApiUrl(`/skus/${skuId}/cost-lines/${editingLine.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ingredientId: data.ingredientId, quantityPerUnit: storedQty, notes: data.notes || null }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       setEditingLine(null);
@@ -698,22 +755,27 @@ export default function SkuDetail({ id }: { id: string }) {
   }
 
   function openEditLine(line: any) {
-    const ingUnit = line.ingredientUnit ?? "kg";
-    const du = initDisplayUnit(line.quantityPerUnit, ingUnit);
-    const dq = toDisplayQty(line.quantityPerUnit, ingUnit, du);
+    const isPackaging = line.packagingItemId != null;
+    const itemType: "ingredient" | "packaging" = isPackaging ? "packaging" : "ingredient";
+    const itemId = isPackaging ? line.packagingItemId : line.ingredientId;
+    const ingUnit = line.ingredientUnit ?? (isPackaging ? "piece" : "kg");
+    const du: DisplayUnit = (!isPackaging && ingUnit === "kg") ? initDisplayUnit(line.quantityPerUnit, ingUnit) : "kg";
+    const dq = (!isPackaging && ingUnit === "kg") ? toDisplayQty(line.quantityPerUnit, ingUnit, du) : line.quantityPerUnit;
+    setEditItemType(itemType);
     setEditDisplayUnit(du);
-    setEditingLine({ id: line.id, ingredientId: line.ingredientId, quantityPerUnit: line.quantityPerUnit, notes: line.notes ?? null, ingredientUnit: ingUnit });
-    editLineForm.reset({ ingredientId: line.ingredientId, displayQty: dq, notes: line.notes ?? "" });
+    setEditingLine({ id: line.id, ingredientId: line.ingredientId ?? null, packagingItemId: line.packagingItemId ?? null, quantityPerUnit: line.quantityPerUnit, notes: line.notes ?? null, ingredientUnit: ingUnit, itemType });
+    editLineForm.reset({ itemId: itemId ?? 0, displayQty: dq, notes: line.notes ?? "" });
   }
 
   function openAddLineFromCategory() {
-    addLineForm.reset({ ingredientId: 0, displayQty: 1, notes: "" });
+    addLineForm.reset({ itemId: 0, displayQty: 1, notes: "" });
     setAddDisplayUnit("kg");
+    setAddItemType("ingredient");
     setIsAddLineOpen(true);
   }
 
-  const currentEditIngUnit = editIng?.unit ?? editingLine?.ingredientUnit ?? "kg";
-  const currentAddIngUnit = addIng?.unit ?? "kg";
+  const currentEditIngUnit = editItem?.unit ?? editingLine?.ingredientUnit ?? "kg";
+  const currentAddIngUnit = addItem?.unit ?? "kg";
 
   return (
     <div className="space-y-6">
@@ -986,13 +1048,15 @@ export default function SkuDetail({ id }: { id: string }) {
                       </TableHeader>
                       <TableBody>
                         {lines.map((line: any) => {
-                          const ing = ingMap[line.ingredientId];
+                          const supplier = line.packagingItemId != null
+                            ? pkgMap[line.packagingItemId]?.supplier
+                            : ingMap[line.ingredientId]?.supplier;
                           return (
                             <TableRow key={line.id} className="group">
                               <TableCell className="pl-4 py-2">
                                 <div className="text-sm font-medium">{line.ingredientName}</div>
-                                {ing?.supplier && (
-                                  <div className="text-xs text-muted-foreground">{ing.supplier}</div>
+                                {supplier && (
+                                  <div className="text-xs text-muted-foreground">{supplier}</div>
                                 )}
                                 {line.notes && (
                                   <div className="text-xs text-muted-foreground italic">{line.notes}</div>
@@ -1907,21 +1971,25 @@ export default function SkuDetail({ id }: { id: string }) {
       </Card>
 
       {/* ── Add Cost Line Dialog ── */}
-      <Dialog open={isAddLineOpen} onOpenChange={(open) => { if (!open) { setIsAddLineOpen(false); addLineForm.reset(); setAddDisplayUnit("kg"); } }}>
+      <Dialog open={isAddLineOpen} onOpenChange={(open) => { if (!open) { setIsAddLineOpen(false); addLineForm.reset(); setAddDisplayUnit("kg"); setAddItemType("ingredient"); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Cost Line</DialogTitle></DialogHeader>
           <Form {...addLineForm}>
             <form onSubmit={addLineForm.handleSubmit(onAddLineSubmit)} className="space-y-4">
-              <FormField control={addLineForm.control} name="ingredientId" render={({ field }) => (
+              <FormField control={addLineForm.control} name="itemId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Ingredient / Cost Item</FormLabel>
+                  <FormLabel>Ingredient / Packaging Item</FormLabel>
                   <IngredientPicker
-                    ingredients={ingredients ?? []}
+                    items={allCostItems}
                     selectedId={field.value}
-                    onSelect={(ing) => {
-                      field.onChange(ing.id);
-                      const du = initDisplayUnit(1, ing.unit);
-                      setAddDisplayUnit(du);
+                    selectedType={addItemType}
+                    onSelect={(item) => {
+                      field.onChange(item.id);
+                      setAddItemType(item._type);
+                      if (item._type === "ingredient") {
+                        const du = initDisplayUnit(1, item.unit);
+                        setAddDisplayUnit(du);
+                      }
                       addLineForm.setValue("displayQty", 1);
                     }}
                   />
@@ -1936,7 +2004,7 @@ export default function SkuDetail({ id }: { id: string }) {
                     <FormControl>
                       <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
                     </FormControl>
-                    {currentAddIngUnit === "kg" && (
+                    {addItemType === "ingredient" && currentAddIngUnit === "kg" && (
                       <div className="flex border rounded-md overflow-hidden">
                         {(["g", "kg"] as DisplayUnit[]).map(u => (
                           <button
@@ -1958,7 +2026,7 @@ export default function SkuDetail({ id }: { id: string }) {
                         ))}
                       </div>
                     )}
-                    {currentAddIngUnit !== "kg" && (
+                    {(addItemType !== "ingredient" || currentAddIngUnit !== "kg") && (
                       <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentAddIngUnit || "unit"}</div>
                     )}
                   </div>
@@ -1976,7 +2044,7 @@ export default function SkuDetail({ id }: { id: string }) {
 
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => { setIsAddLineOpen(false); addLineForm.reset(); }}>Cancel</Button>
-                <Button type="submit" disabled={addLine.isPending}>Add</Button>
+                <Button type="submit">Add</Button>
               </DialogFooter>
             </form>
           </Form>
@@ -1991,16 +2059,20 @@ export default function SkuDetail({ id }: { id: string }) {
           </SheetHeader>
           <Form {...editLineForm}>
             <form onSubmit={editLineForm.handleSubmit(onEditLineSubmit)} className="space-y-5">
-              <FormField control={editLineForm.control} name="ingredientId" render={({ field }) => (
+              <FormField control={editLineForm.control} name="itemId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Ingredient / Cost Item</FormLabel>
+                  <FormLabel>Ingredient / Packaging Item</FormLabel>
                   <IngredientPicker
-                    ingredients={ingredients ?? []}
+                    items={allCostItems}
                     selectedId={field.value}
-                    onSelect={(ing) => {
-                      field.onChange(ing.id);
-                      const du = initDisplayUnit(parseFloat(String(editLineForm.getValues("displayQty"))) || 1, ing.unit);
-                      setEditDisplayUnit(du);
+                    selectedType={editItemType}
+                    onSelect={(item) => {
+                      field.onChange(item.id);
+                      setEditItemType(item._type);
+                      if (item._type === "ingredient") {
+                        const du = initDisplayUnit(parseFloat(String(editLineForm.getValues("displayQty"))) || 1, item.unit);
+                        setEditDisplayUnit(du);
+                      }
                     }}
                   />
                   <FormMessage />
@@ -2014,7 +2086,7 @@ export default function SkuDetail({ id }: { id: string }) {
                     <FormControl>
                       <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
                     </FormControl>
-                    {currentEditIngUnit === "kg" && (
+                    {editItemType === "ingredient" && currentEditIngUnit === "kg" && (
                       <div className="flex border rounded-md overflow-hidden">
                         {(["g", "kg"] as DisplayUnit[]).map(u => (
                           <button
@@ -2036,7 +2108,7 @@ export default function SkuDetail({ id }: { id: string }) {
                         ))}
                       </div>
                     )}
-                    {currentEditIngUnit !== "kg" && (
+                    {(editItemType !== "ingredient" || currentEditIngUnit !== "kg") && (
                       <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentEditIngUnit || "unit"}</div>
                     )}
                   </div>

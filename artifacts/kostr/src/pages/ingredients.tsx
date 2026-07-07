@@ -143,6 +143,17 @@ export default function CostLibrary() {
     return result.sort();
   }, [ingredients]);
 
+  const allDisplayCategories = useMemo(() => {
+    const predefined = INGREDIENT_CATEGORIES as readonly string[];
+    const custom: string[] = [];
+    for (const ing of ingredients ?? []) {
+      if (!predefined.includes(ing.category) && !custom.includes(ing.category)) {
+        custom.push(ing.category);
+      }
+    }
+    return [...predefined, ...custom.sort()];
+  }, [ingredients]);
+
   const filteredPackaging = useMemo(() => {
     let items = packagingItems ?? [];
     if (packagingCategoryFilter !== "all") {
@@ -423,21 +434,24 @@ export default function CostLibrary() {
           </div>
         ) : (
           <div className="space-y-4">
-            {INGREDIENT_CATEGORIES.map(cat => {
+            {allDisplayCategories.map(cat => {
               const allCatItems = (filteredIngredients || []).filter(i => i.category === cat);
               const items = cat === "Raw Materials" && rawMaterialsSubCategoryFilter !== "all"
                 ? allCatItems.filter(i => i.subCategory === rawMaterialsSubCategoryFilter)
                 : allCatItems;
+              const borderClass = CATEGORY_BORDER[cat] ?? "border-l-slate-400";
+              const headerBgClass = CATEGORY_HEADER_BG[cat] ?? "bg-slate-50";
+              const textClass = CATEGORY_TEXT[cat] ?? "text-slate-600";
               return (
-                <Card key={cat} className={`border-l-4 ${CATEGORY_BORDER[cat]} overflow-hidden`}>
-                  <div className={`px-6 py-3 ${CATEGORY_HEADER_BG[cat]} flex items-center justify-between gap-3`}>
+                <Card key={cat} className={`border-l-4 ${borderClass} overflow-hidden`}>
+                  <div className={`px-6 py-3 ${headerBgClass} flex items-center justify-between gap-3`}>
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold uppercase tracking-wider ${CATEGORY_TEXT[cat]}`}>{cat}</span>
+                      <span className={`text-xs font-bold uppercase tracking-wider ${textClass}`}>{cat}</span>
                       {allCatItems.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{allCatItems.length}</Badge>}
                     </div>
                     <button
                       onClick={() => setLocation(`/ingredients/new?category=${encodeURIComponent(cat)}`)}
-                      className={`text-xs ${CATEGORY_TEXT[cat]} hover:underline flex items-center gap-0.5`}
+                      className={`text-xs ${textClass} hover:underline flex items-center gap-0.5`}
                     >
                       <Plus className="w-3 h-3" /> Add
                     </button>

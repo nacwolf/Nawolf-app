@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Save, Upload, X, FileText, Loader2, Download, ExternalLink, Pencil, Trash2, Check } from "lucide-react";
+import { ArrowLeft, Save, Upload, X, FileText, Loader2, Download, ExternalLink, Pencil, Trash2, Check, Plus } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -51,11 +51,9 @@ import { PhotoUpload } from "@/components/photo-upload";
 
 const UNITS = ["g", "kg", "liter", "ml", "piece", "box", "bag", "roll", "unit", "hr"] as const;
 
-const INGREDIENT_CATEGORIES = ["Raw Materials", "Packaging", "Quality & Compliance", "Delivery"] as const;
-
 const editSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  category: z.enum(INGREDIENT_CATEGORIES),
+  category: z.string().min(1, "Category is required"),
   unit: z.enum(UNITS),
   subCategory: z.string().optional(),
   description: z.string().optional(),
@@ -84,8 +82,39 @@ const editPriceSchema = z.object({
 
 interface PendingFile { file: File; id: string; }
 
+type IngredientData = Awaited<ReturnType<typeof useGetIngredient>>["data"] & {};
+
 export default function IngredientDetail({ id }: { id: string }) {
   const ingredientId = parseInt(id, 10);
+  const [, setLocation] = useLocation();
+
+  const { data: ingredient, isLoading: loadingIng } = useGetIngredient(ingredientId, {
+    query: { enabled: !isNaN(ingredientId) }
+  });
+
+  if (loadingIng) {
+    return (
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
+  }
+
+  if (!ingredient) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-muted-foreground">Item not found.</p>
+        <Button variant="link" onClick={() => setLocation("/ingredients")}>Back to Cost Library</Button>
+      </div>
+    );
+  }
+
+  return <IngredientDetailForm ingredient={ingredient} />;
+}
+
+function IngredientDetailForm({ ingredient }: { ingredient: NonNullable<IngredientData> }) {
+  const ingredientId = ingredient.id;
   const [, setLocation] = useLocation();
   const { user } = useUser();
   const { toast } = useToast();
@@ -96,19 +125,25 @@ export default function IngredientDetail({ id }: { id: string }) {
   const [deletingPriceId, setDeletingPriceId] = useState<number | null>(null);
   const [skuPanelOpen, setSkuPanelOpen] = useState(false);
 
-  const { data: ingredient, isLoading: loadingIng } = useGetIngredient(ingredientId, {
-    query: { enabled: !isNaN(ingredientId) }
-  });
-
-  const { data: history, isLoading: loadingHist } = useGetIngredientPriceHistory(ingredientId, {
-    query: { enabled: !isNaN(ingredientId) }
-  });
-
-  const { data: attachments, isLoading: loadingAttachments } = useListIngredientAttachments(ingredientId, {
-    query: { enabled: !isNaN(ingredientId) }
-  });
-
+  const { data: history, isLoading: loadingHist } = useGetIngredientPriceHistory(ingredientId);
+  const { data: attachments, isLoading: loadingAttachments } = useListIngredientAttachments(ingredientId);
   const { data: subcategoryOptions = [] } = useListIngredientSubcategories();
+
+  const { data: categoryOptions = [] } = useQuery<string[]>({
+    queryKey: ["/api/ingredients/categories"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/ingredients/categories"));
+      return r.json();
+    },
+  });
+
+  const { data: allIngredients = [] } = useQuery<{ id: number; name: string; unit: string }[]>({
+    queryKey: ["/api/ingredients"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl("/ingredients"));
+      return r.json();
+    },
+  });
 
   type SkuExposureRow = {
     id: number; skuCode: string; name: string | null; nameThai: string;
@@ -124,7 +159,7 @@ export default function IngredientDetail({ id }: { id: string }) {
       if (!r.ok) throw new Error("Failed to load SKUs");
       return r.json();
     },
-    enabled: skuPanelOpen && !isNaN(ingredientId),
+    enabled: skuPanelOpen,
   });
 
   const updateIngredient = useUpdateIngredient();
@@ -135,44 +170,22 @@ export default function IngredientDetail({ id }: { id: string }) {
   const editForm = useForm<z.infer<typeof editSchema>>({
     resolver: zodResolver(editSchema),
     defaultValues: {
-      name: "",
-      category: "Raw Materials",
-      unit: "kg",
-      subCategory: "",
-      description: "",
-      supplier: "",
-      countryOfOrigin: "",
-      priceTier1: undefined,
-      priceTier1Description: "",
-      priceTier2: undefined,
-      priceTier2Description: "",
-      notes: "",
+      name: ingredient.name,
+      category: ingredient.category,
+      unit: (UNITS as readonly string[]).includes(ingredient.unit)
+        ? (ingredient.unit as typeof UNITS[number])
+        : "kg",
+      subCategory: ingredient.subCategory ?? "",
+      description: ingredient.description ?? "",
+      supplier: ingredient.supplier ?? "",
+      countryOfOrigin: ingredient.countryOfOrigin ?? "",
+      priceTier1: ingredient.priceTier1 ?? undefined,
+      priceTier1Description: ingredient.priceTier1Description ?? "",
+      priceTier2: ingredient.priceTier2 ?? undefined,
+      priceTier2Description: ingredient.priceTier2Description ?? "",
+      notes: ingredient.notes ?? "",
     },
   });
-
-  useEffect(() => {
-    if (ingredient) {
-      editForm.reset({
-        name: ingredient.name,
-        category: (INGREDIENT_CATEGORIES as readonly string[]).includes(ingredient.category)
-          ? (ingredient.category as typeof INGREDIENT_CATEGORIES[number])
-          : "Raw Materials",
-        unit: (UNITS as readonly string[]).includes(ingredient.unit)
-          ? (ingredient.unit as typeof UNITS[number])
-          : "kg",
-        subCategory: ingredient.subCategory ?? "",
-        description: ingredient.description ?? "",
-        supplier: ingredient.supplier ?? "",
-        countryOfOrigin: ingredient.countryOfOrigin ?? "",
-        priceTier1: ingredient.priceTier1 ?? undefined,
-        priceTier1Description: ingredient.priceTier1Description ?? "",
-        priceTier2: ingredient.priceTier2 ?? undefined,
-        priceTier2Description: ingredient.priceTier2Description ?? "",
-        notes: ingredient.notes ?? "",
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingredient?.id]);
 
   const priceForm = useForm<z.infer<typeof priceSchema>>({
     resolver: zodResolver(priceSchema),
@@ -335,24 +348,6 @@ export default function IngredientDetail({ id }: { id: string }) {
     setIsUploading(false);
   }
 
-  if (loadingIng) {
-    return (
-      <div className="space-y-6 max-w-2xl mx-auto">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
-  }
-
-  if (!ingredient) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground">Item not found.</p>
-        <Button variant="link" onClick={() => setLocation("/ingredients")}>Back to Cost Library</Button>
-      </div>
-    );
-  }
-
   const chartData = history ? [...history].reverse().map((h: IngredientPrice) => ({
     date: formatDate(h.effectiveDate),
     price: h.price,
@@ -432,14 +427,14 @@ export default function IngredientDetail({ id }: { id: string }) {
                 <FormField control={editForm.control} name="category" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {INGREDIENT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SubCategoryCombobox
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        options={categoryOptions}
+                        placeholder="e.g. Raw Materials"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -562,6 +557,16 @@ export default function IngredientDetail({ id }: { id: string }) {
               </Button>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Sub-ingredients</CardTitle>
+          <p className="text-xs text-muted-foreground">Ingredients that make up this item (e.g. for a compound or blended material).</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <SubIngredientsPanel ingredientId={ingredientId} allIngredients={allIngredients} />
         </CardContent>
       </Card>
 
@@ -965,6 +970,174 @@ export default function IngredientDetail({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+type ComponentRow = {
+  id: number;
+  childIngredientId: number;
+  childName: string;
+  childUnit: string;
+  quantity: number;
+  unit: string;
+  notes: string | null;
+};
+
+function SubIngredientsPanel({ ingredientId, allIngredients }: {
+  ingredientId: number;
+  allIngredients: { id: number; name: string; unit: string }[];
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const { data: components = [], isLoading } = useQuery<ComponentRow[]>({
+    queryKey: ["/api/ingredients", ingredientId, "components"],
+    queryFn: async () => {
+      const r = await fetch(getApiUrl(`/ingredients/${ingredientId}/components`));
+      return r.json();
+    },
+  });
+
+  const availableIngredients = allIngredients.filter(i => i.id !== ingredientId);
+
+  async function handleAdd() {
+    if (!selectedChildId || !qty || !unit) return;
+    setIsSaving(true);
+    try {
+      const r = await fetch(getApiUrl(`/ingredients/${ingredientId}/components`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childIngredientId: selectedChildId, quantity: parseFloat(qty), unit }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? "Failed");
+      qc.invalidateQueries({ queryKey: ["/api/ingredients", ingredientId, "components"] });
+      setAdding(false);
+      setSelectedChildId(null);
+      setQty("");
+      setUnit("");
+      toast({ title: "Sub-ingredient added" });
+    } catch (e) {
+      toast({ variant: "destructive", title: String(e instanceof Error ? e.message : e) });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete(componentId: number) {
+    try {
+      await fetch(getApiUrl(`/ingredients/${ingredientId}/components/${componentId}`), { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["/api/ingredients", ingredientId, "components"] });
+      toast({ title: "Removed" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to remove" });
+    }
+  }
+
+  const selectedChild = availableIngredients.find(i => i.id === selectedChildId);
+
+  return (
+    <div className="space-y-3">
+      {isLoading ? (
+        <Skeleton className="h-12 w-full" />
+      ) : components.length === 0 && !adding ? (
+        <p className="text-sm text-muted-foreground">No sub-ingredients yet.</p>
+      ) : components.length > 0 ? (
+        <div className="border rounded-md overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                <TableHead className="pl-4 text-xs">Ingredient</TableHead>
+                <TableHead className="text-xs text-right">Quantity</TableHead>
+                <TableHead className="text-xs">Unit</TableHead>
+                <TableHead className="w-8" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {components.map(c => (
+                <TableRow key={c.id}>
+                  <TableCell className="pl-4 text-sm font-medium">{c.childName}</TableCell>
+                  <TableCell className="text-right tabular-nums text-sm">{c.quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.unit}</TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
+
+      {adding ? (
+        <div className="border rounded-lg p-3 space-y-3 bg-muted/20">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="col-span-2">
+              <label className="text-xs font-medium mb-1 block">Ingredient</label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                value={selectedChildId ?? ""}
+                onChange={e => {
+                  const id = parseInt(e.target.value, 10);
+                  setSelectedChildId(isNaN(id) ? null : id);
+                  const found = availableIngredients.find(i => i.id === id);
+                  if (found) setUnit(found.unit);
+                }}
+              >
+                <option value="">Select an ingredient...</option>
+                {availableIngredients.map(i => (
+                  <option key={i.id} value={i.id}>{i.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Quantity</label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0.00"
+                value={qty}
+                onChange={e => setQty(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">Unit</label>
+              <Input
+                placeholder={selectedChild?.unit ?? "kg"}
+                value={unit}
+                onChange={e => setUnit(e.target.value)}
+                className="h-9"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setAdding(false); setSelectedChildId(null); setQty(""); setUnit(""); }}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" disabled={!selectedChildId || !qty || !unit || isSaving} onClick={handleAdd}>
+              {isSaving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+              Add
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" onClick={() => setAdding(true)} className="gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Add sub-ingredient
+        </Button>
+      )}
     </div>
   );
 }
