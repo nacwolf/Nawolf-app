@@ -30,13 +30,18 @@ import { Link } from "wouter";
 import { getApiUrl } from "@/lib/queryClient";
 import { PhotoUpload } from "@/components/photo-upload";
 
-const CATEGORIES = [
+const BOM_CATEGORIES = [
   "Raw Materials",
   "Packaging",
+] as const;
+
+const SECONDARY_CATEGORIES = [
   "Overhead",
   "Quality & Compliance",
   "Delivery",
 ] as const;
+
+const CATEGORIES = [...BOM_CATEGORIES, ...SECONDARY_CATEGORIES] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Raw Materials": "#22c55e",
@@ -672,7 +677,8 @@ export default function SkuDetail({ id }: { id: string }) {
 
   const costLinesByCategory = useMemo(() => {
     const map: Record<string, any[]> = {};
-    for (const cat of CATEGORIES) map[cat] = [];
+    for (const cat of BOM_CATEGORIES) map[cat] = [];
+    for (const cat of SECONDARY_CATEGORIES) map[cat] = [];
     for (const line of sku?.costLines ?? []) {
       const cat = (line as any).ingredientCategory || "Other";
       if (!map[cat]) map[cat] = [];
@@ -1090,7 +1096,7 @@ export default function SkuDetail({ id }: { id: string }) {
           </CardHeader>
 
           <CardContent className="p-0 pb-1">
-            {CATEGORIES.map(cat => {
+            {BOM_CATEGORIES.map(cat => {
               const lines = costLinesByCategory[cat] ?? [];
               const catTotal = lines.reduce((s: number, l: any) => s + (l.lineCost || 0), 0);
               return (
@@ -1464,6 +1470,104 @@ export default function SkuDetail({ id }: { id: string }) {
         )}
       </Card>
       </TooltipProvider>
+
+      {/* ── Other Cost Lines (Overhead, Quality & Compliance, Delivery) ── */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div>
+            <CardTitle className="text-base">Other Cost Lines</CardTitle>
+            <CardDescription>Overhead, quality, and delivery costs per unit</CardDescription>
+          </div>
+          <Button size="sm" onClick={openAddLineFromCategory}>
+            <Plus className="w-4 h-4 mr-1.5" /> Add Cost Line
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0 pb-1">
+          {SECONDARY_CATEGORIES.map(cat => {
+            const lines = costLinesByCategory[cat] ?? [];
+            const catTotal = lines.reduce((s: number, l: any) => s + (l.lineCost || 0), 0);
+            return (
+              <div key={cat} className={`border-l-4 ${CATEGORY_BORDER[cat]} border-b last:border-b-0`}>
+                <div className={`px-4 py-2 flex items-center justify-between ${CATEGORY_HEADER_BG[cat]}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${CATEGORY_TEXT[cat]}`}>{cat}</span>
+                    {lines.length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{lines.length}</Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {lines.length > 0 && (
+                      <span className="text-xs font-medium text-muted-foreground">{formatCurrency(catTotal)}</span>
+                    )}
+                    <button
+                      onClick={openAddLineFromCategory}
+                      className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  </div>
+                </div>
+                {lines.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="pl-4 text-xs h-8 text-muted-foreground font-medium">Item</TableHead>
+                        <TableHead className="text-right text-xs h-8 text-muted-foreground font-medium">Unit Cost</TableHead>
+                        <TableHead className="text-right text-xs h-8 text-muted-foreground font-medium">Qty</TableHead>
+                        <TableHead className="text-right text-xs h-8 text-muted-foreground font-medium">Line Cost</TableHead>
+                        <TableHead className="w-16 h-8" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {lines.map((line: any) => {
+                        const supplier = line.ingredientId != null ? ingMap[line.ingredientId]?.supplier : null;
+                        return (
+                          <TableRow key={line.id} className="group">
+                            <TableCell className="pl-4 py-2">
+                              <div className="text-sm font-medium">{line.ingredientName}</div>
+                              {supplier && <div className="text-xs text-muted-foreground">{supplier}</div>}
+                              {line.notes && <div className="text-xs text-muted-foreground italic">{line.notes}</div>}
+                            </TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground py-2">
+                              {formatCurrency(line.currentPrice)}/{line.ingredientUnit}
+                            </TableCell>
+                            <TableCell className="text-right text-sm py-2">
+                              {formatQty(line.quantityPerUnit, line.ingredientUnit)}
+                            </TableCell>
+                            <TableCell className="text-right text-sm font-medium py-2">
+                              {formatCurrency(line.lineCost)}
+                            </TableCell>
+                            <TableCell className="py-2 pr-3">
+                              <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => openEditLine(line)}
+                                  className="p-1 rounded hover:bg-muted transition-colors"
+                                  title="Edit"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteLine(line.id)}
+                                  className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                                  title="Remove"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                </button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="px-4 py-2.5 text-xs text-muted-foreground italic">No items in this category</div>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
