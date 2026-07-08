@@ -300,6 +300,10 @@ export default function SkuDetail({ id }: { id: string }) {
   const [addItemType, setAddItemType] = useState<"ingredient" | "packaging">("ingredient");
   const [editItemType, setEditItemType] = useState<"ingredient" | "packaging">("ingredient");
   const [isSavingLine, setIsSavingLine] = useState(false);
+  const [addNumBlocks, setAddNumBlocks] = useState("");
+  const [addMoq, setAddMoq] = useState("");
+  const [editNumBlocks, setEditNumBlocks] = useState("");
+  const [editMoq, setEditMoq] = useState("");
   const [isSavingProd, setIsSavingProd] = useState(false);
   const [prodUnitsPerDay, setProdUnitsPerDay] = useState<string>("");
   const [prodCartonSize, setProdCartonSize] = useState<string>("1");
@@ -510,6 +514,7 @@ export default function SkuDetail({ id }: { id: string }) {
       name: p.nameEnglish,
       unit: p.unit,
       category: "Packaging",
+      pkgCategory: p.category,
       currentPrice: parseFloat(p.unitCost),
       supplier: p.supplier,
       _type: "packaging" as const,
@@ -521,6 +526,9 @@ export default function SkuDetail({ id }: { id: string }) {
   const addItem = allCostItems.find(i => i.id === addItemId && i._type === addItemType);
   const editItemId = editLineForm.watch("itemId");
   const editItem = allCostItems.find(i => i.id === editItemId && i._type === editItemType);
+
+  const addIsPrintingBlock = (addItem as any)?.pkgCategory === "printing_block";
+  const editIsPrintingBlock = (editItem as any)?.pkgCategory === "printing_block";
 
   const { data: teamMembers } = useQuery({
     queryKey: ["team-members"],
@@ -696,11 +704,26 @@ export default function SkuDetail({ id }: { id: string }) {
 
   async function onAddLineSubmit(data: z.infer<typeof lineSchema>) {
     const itemUnit = addItem?.unit ?? "kg";
-    const storedQty = addItemType === "ingredient" ? toStoredQty(data.displayQty, itemUnit, addDisplayUnit) : data.displayQty;
     try {
-      const payload: any = { quantityPerUnit: storedQty, notes: data.notes || null };
-      if (addItemType === "ingredient") payload.ingredientId = data.itemId;
-      else payload.packagingItemId = data.itemId;
+      let payload: any;
+      if (addIsPrintingBlock) {
+        const nb = parseInt(addNumBlocks, 10);
+        const m = parseInt(addMoq, 10);
+        if (!nb || !m || nb < 1 || m < 1) {
+          toast({ variant: "destructive", title: "Enter valid number of blocks and MOQ" });
+          return;
+        }
+        payload = {
+          packagingItemId: data.itemId,
+          quantityPerUnit: nb / m,
+          notes: `${nb} blocks ÷ ${m.toLocaleString()} unit MOQ`,
+        };
+      } else {
+        const storedQty = addItemType === "ingredient" ? toStoredQty(data.displayQty, itemUnit, addDisplayUnit) : data.displayQty;
+        payload = { quantityPerUnit: storedQty, notes: data.notes || null };
+        if (addItemType === "ingredient") payload.ingredientId = data.itemId;
+        else payload.packagingItemId = data.itemId;
+      }
       const res = await fetch(getApiUrl(`/skus/${skuId}/cost-lines`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -716,6 +739,8 @@ export default function SkuDetail({ id }: { id: string }) {
       addLineForm.reset();
       setAddDisplayUnit("kg");
       setAddItemType("ingredient");
+      setAddNumBlocks("");
+      setAddMoq("");
       qc.invalidateQueries({ queryKey: getGetSkuQueryKey(skuId) });
       toast({ title: "Cost line added" });
     } catch {
@@ -726,12 +751,28 @@ export default function SkuDetail({ id }: { id: string }) {
   async function onEditLineSubmit(data: z.infer<typeof lineSchema>) {
     if (!editingLine) return;
     const itemUnit = editItem?.unit ?? editingLine.ingredientUnit;
-    const storedQty = editItemType === "ingredient" ? toStoredQty(data.displayQty, itemUnit, editDisplayUnit) : data.displayQty;
     setIsSavingLine(true);
     try {
-      const payload: any = { quantityPerUnit: storedQty, notes: data.notes || null };
-      if (editItemType === "ingredient") payload.ingredientId = data.itemId;
-      else payload.packagingItemId = data.itemId;
+      let payload: any;
+      if (editIsPrintingBlock) {
+        const nb = parseInt(editNumBlocks, 10);
+        const m = parseInt(editMoq, 10);
+        if (!nb || !m || nb < 1 || m < 1) {
+          toast({ variant: "destructive", title: "Enter valid number of blocks and MOQ" });
+          setIsSavingLine(false);
+          return;
+        }
+        payload = {
+          packagingItemId: data.itemId,
+          quantityPerUnit: nb / m,
+          notes: `${nb} blocks ÷ ${m.toLocaleString()} unit MOQ`,
+        };
+      } else {
+        const storedQty = editItemType === "ingredient" ? toStoredQty(data.displayQty, itemUnit, editDisplayUnit) : data.displayQty;
+        payload = { quantityPerUnit: storedQty, notes: data.notes || null };
+        if (editItemType === "ingredient") payload.ingredientId = data.itemId;
+        else payload.packagingItemId = data.itemId;
+      }
       const res = await fetch(getApiUrl(`/skus/${skuId}/cost-lines/${editingLine.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -772,10 +813,24 @@ export default function SkuDetail({ id }: { id: string }) {
     const itemType: "ingredient" | "packaging" = isPackaging ? "packaging" : "ingredient";
     const itemId = isPackaging ? line.packagingItemId : line.ingredientId;
     const ingUnit = line.ingredientUnit ?? (isPackaging ? "piece" : "kg");
+    const isPb = isPackaging && pkgMap[line.packagingItemId]?.category === "printing_block";
     const du: DisplayUnit = (!isPackaging && ingUnit === "kg") ? initDisplayUnit(line.quantityPerUnit, ingUnit) : "kg";
     const dq = (!isPackaging && ingUnit === "kg") ? toDisplayQty(line.quantityPerUnit, ingUnit, du) : line.quantityPerUnit;
     setEditItemType(itemType);
     setEditDisplayUnit(du);
+    if (isPb) {
+      const match = (line.notes ?? "").match(/^(\d+) blocks ÷ ([\d,]+) unit MOQ$/);
+      if (match) {
+        setEditNumBlocks(match[1]);
+        setEditMoq(match[2].replace(/,/g, ""));
+      } else {
+        setEditNumBlocks("");
+        setEditMoq("");
+      }
+    } else {
+      setEditNumBlocks("");
+      setEditMoq("");
+    }
     setEditingLine({ id: line.id, ingredientId: line.ingredientId ?? null, packagingItemId: line.packagingItemId ?? null, quantityPerUnit: line.quantityPerUnit, notes: line.notes ?? null, ingredientUnit: ingUnit, itemType });
     editLineForm.reset({ itemId: itemId ?? 0, displayQty: dq, notes: line.notes ?? "" });
   }
@@ -784,6 +839,8 @@ export default function SkuDetail({ id }: { id: string }) {
     addLineForm.reset({ itemId: 0, displayQty: 1, notes: "" });
     setAddDisplayUnit("kg");
     setAddItemType("ingredient");
+    setAddNumBlocks("");
+    setAddMoq("");
     setIsAddLineOpen(true);
   }
 
@@ -1061,7 +1118,7 @@ export default function SkuDetail({ id }: { id: string }) {
                       </TableHeader>
                       <TableBody>
                         {lines.map((line: any, lineIdx: number) => {
-                          const isPrintingBlock = !!line.isPrintingBlock;
+                          const isPrintingBlock = !!line.isPrintingBlock || (line.packagingItemId != null && pkgMap[line.packagingItemId]?.category === "printing_block");
                           const supplier = !isPrintingBlock && line.packagingItemId != null
                             ? pkgMap[line.packagingItemId]?.supplier
                             : !isPrintingBlock && line.ingredientId != null
@@ -1999,7 +2056,7 @@ export default function SkuDetail({ id }: { id: string }) {
       </Card>
 
       {/* ── Add Cost Line Dialog ── */}
-      <Dialog open={isAddLineOpen} onOpenChange={(open) => { if (!open) { setIsAddLineOpen(false); addLineForm.reset(); setAddDisplayUnit("kg"); setAddItemType("ingredient"); } }}>
+      <Dialog open={isAddLineOpen} onOpenChange={(open) => { if (!open) { setIsAddLineOpen(false); addLineForm.reset(); setAddDisplayUnit("kg"); setAddItemType("ingredient"); setAddNumBlocks(""); setAddMoq(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Cost Line</DialogTitle></DialogHeader>
           <Form {...addLineForm}>
@@ -2018,6 +2075,10 @@ export default function SkuDetail({ id }: { id: string }) {
                         const du = initDisplayUnit(1, item.unit);
                         setAddDisplayUnit(du);
                       }
+                      if ((item as any).pkgCategory !== "printing_block") {
+                        setAddNumBlocks("");
+                        setAddMoq("");
+                      }
                       addLineForm.setValue("displayQty", 1);
                     }}
                   />
@@ -2025,53 +2086,95 @@ export default function SkuDetail({ id }: { id: string }) {
                 </FormItem>
               )} />
 
-              <FormField control={addLineForm.control} name="displayQty" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quantity per unit</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
-                    </FormControl>
-                    {addItemType === "ingredient" && currentAddIngUnit === "kg" && (
-                      <div className="flex border rounded-md overflow-hidden">
-                        {(["g", "kg"] as DisplayUnit[]).map(u => (
-                          <button
-                            key={u}
-                            type="button"
-                            onClick={() => {
-                              const current = parseFloat(String(field.value)) || 0;
-                              if (u === "g" && addDisplayUnit === "kg") {
-                                addLineForm.setValue("displayQty", parseFloat((current * 1000).toFixed(4)));
-                              } else if (u === "kg" && addDisplayUnit === "g") {
-                                addLineForm.setValue("displayQty", parseFloat((current / 1000).toFixed(6)));
-                              }
-                              setAddDisplayUnit(u);
-                            }}
-                            className={`px-3 py-2 text-sm font-medium transition-colors ${addDisplayUnit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                          >
-                            {u}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {(addItemType !== "ingredient" || currentAddIngUnit !== "kg") && (
-                      <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentAddIngUnit || "unit"}</div>
-                    )}
+              {addIsPrintingBlock ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Number of blocks</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="e.g. 8"
+                        value={addNumBlocks}
+                        onChange={e => setAddNumBlocks(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">MOQ (units)</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="e.g. 10000"
+                        value={addMoq}
+                        onChange={e => setAddMoq(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <FormMessage />
-                </FormItem>
-              )} />
+                  {addItem && addNumBlocks && addMoq && parseInt(addNumBlocks) > 0 && parseInt(addMoq) > 0 && (
+                    <div className="rounded-lg bg-purple-50 border border-purple-200 px-4 py-3 text-sm">
+                      <span className="text-muted-foreground">Cost per unit: </span>
+                      <span className="font-semibold text-purple-700">
+                        {formatCurrency((parseInt(addNumBlocks) * addItem.currentPrice) / parseInt(addMoq))}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({addNumBlocks} × {formatCurrency(addItem.currentPrice)} ÷ {parseInt(addMoq).toLocaleString()})
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <FormField control={addLineForm.control} name="displayQty" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity per unit</FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
+                      </FormControl>
+                      {addItemType === "ingredient" && currentAddIngUnit === "kg" && (
+                        <div className="flex border rounded-md overflow-hidden">
+                          {(["g", "kg"] as DisplayUnit[]).map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => {
+                                const current = parseFloat(String(field.value)) || 0;
+                                if (u === "g" && addDisplayUnit === "kg") {
+                                  addLineForm.setValue("displayQty", parseFloat((current * 1000).toFixed(4)));
+                                } else if (u === "kg" && addDisplayUnit === "g") {
+                                  addLineForm.setValue("displayQty", parseFloat((current / 1000).toFixed(6)));
+                                }
+                                setAddDisplayUnit(u);
+                              }}
+                              className={`px-3 py-2 text-sm font-medium transition-colors ${addDisplayUnit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {(addItemType !== "ingredient" || currentAddIngUnit !== "kg") && (
+                        <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentAddIngUnit || "unit"}</div>
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
 
-              <FormField control={addLineForm.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                  <FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              {!addIsPrintingBlock && (
+                <FormField control={addLineForm.control} name="notes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
 
               <DialogFooter>
-                <Button type="button" variant="ghost" onClick={() => { setIsAddLineOpen(false); addLineForm.reset(); }}>Cancel</Button>
+                <Button type="button" variant="ghost" onClick={() => { setIsAddLineOpen(false); addLineForm.reset(); setAddNumBlocks(""); setAddMoq(""); }}>Cancel</Button>
                 <Button type="submit">Add</Button>
               </DialogFooter>
             </form>
@@ -2101,56 +2204,102 @@ export default function SkuDetail({ id }: { id: string }) {
                         const du = initDisplayUnit(parseFloat(String(editLineForm.getValues("displayQty"))) || 1, item.unit);
                         setEditDisplayUnit(du);
                       }
+                      if ((item as any).pkgCategory !== "printing_block") {
+                        setEditNumBlocks("");
+                        setEditMoq("");
+                      }
                     }}
                   />
                   <FormMessage />
                 </FormItem>
               )} />
 
-              <FormField control={editLineForm.control} name="displayQty" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quantity per unit</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
-                    </FormControl>
-                    {editItemType === "ingredient" && currentEditIngUnit === "kg" && (
-                      <div className="flex border rounded-md overflow-hidden">
-                        {(["g", "kg"] as DisplayUnit[]).map(u => (
-                          <button
-                            key={u}
-                            type="button"
-                            onClick={() => {
-                              const current = parseFloat(String(field.value)) || 0;
-                              if (u === "g" && editDisplayUnit === "kg") {
-                                editLineForm.setValue("displayQty", parseFloat((current * 1000).toFixed(4)));
-                              } else if (u === "kg" && editDisplayUnit === "g") {
-                                editLineForm.setValue("displayQty", parseFloat((current / 1000).toFixed(6)));
-                              }
-                              setEditDisplayUnit(u);
-                            }}
-                            className={`px-3 py-2 text-sm font-medium transition-colors ${editDisplayUnit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                          >
-                            {u}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {(editItemType !== "ingredient" || currentEditIngUnit !== "kg") && (
-                      <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentEditIngUnit || "unit"}</div>
-                    )}
+              {editIsPrintingBlock ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Number of blocks</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="e.g. 8"
+                        value={editNumBlocks}
+                        onChange={e => setEditNumBlocks(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">MOQ (units)</label>
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="e.g. 10000"
+                        value={editMoq}
+                        onChange={e => setEditMoq(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {editItem && editNumBlocks && editMoq && parseInt(editNumBlocks) > 0 && parseInt(editMoq) > 0 && (
+                    <div className="rounded-lg bg-purple-50 border border-purple-200 px-4 py-3 text-sm">
+                      <span className="text-muted-foreground">Cost per unit: </span>
+                      <span className="font-semibold text-purple-700">
+                        {formatCurrency((parseInt(editNumBlocks) * editItem.currentPrice) / parseInt(editMoq))}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({editNumBlocks} × {formatCurrency(editItem.currentPrice)} ÷ {parseInt(editMoq).toLocaleString()})
+                      </span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <FormField control={editLineForm.control} name="displayQty" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity per unit</FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input type="number" step="any" placeholder="0" {...field} className="flex-1" />
+                      </FormControl>
+                      {editItemType === "ingredient" && currentEditIngUnit === "kg" && (
+                        <div className="flex border rounded-md overflow-hidden">
+                          {(["g", "kg"] as DisplayUnit[]).map(u => (
+                            <button
+                              key={u}
+                              type="button"
+                              onClick={() => {
+                                const current = parseFloat(String(field.value)) || 0;
+                                if (u === "g" && editDisplayUnit === "kg") {
+                                  editLineForm.setValue("displayQty", parseFloat((current * 1000).toFixed(4)));
+                                } else if (u === "kg" && editDisplayUnit === "g") {
+                                  editLineForm.setValue("displayQty", parseFloat((current / 1000).toFixed(6)));
+                                }
+                                setEditDisplayUnit(u);
+                              }}
+                              className={`px-3 py-2 text-sm font-medium transition-colors ${editDisplayUnit === u ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                            >
+                              {u}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {(editItemType !== "ingredient" || currentEditIngUnit !== "kg") && (
+                        <div className="flex items-center px-3 border rounded-md bg-muted text-sm text-muted-foreground">{currentEditIngUnit || "unit"}</div>
+                      )}
                   </div>
                   <FormMessage />
                 </FormItem>
               )} />
+              )}
 
-              <FormField control={editLineForm.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                  <FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              {!editIsPrintingBlock && (
+                <FormField control={editLineForm.control} name="notes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl><Input placeholder="e.g. 5% waste factor" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
 
               <SheetFooter className="flex gap-2 pt-2">
                 <Button type="button" variant="ghost" className="flex-1" onClick={() => setEditingLine(null)}>Cancel</Button>
