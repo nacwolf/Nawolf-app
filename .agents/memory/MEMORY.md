@@ -1,0 +1,1 @@
+- [packaging_items.unit enum cast](packaging-unit-cast.md) — `packaging_items.unit` is a PG enum; always cast `::text` when used in COALESCE with text columns.
