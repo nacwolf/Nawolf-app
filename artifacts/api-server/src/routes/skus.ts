@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, max, sql } from "drizzle-orm";
-import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable, skuProductPhotosTable, skuCertificateFilesTable, packagingItemsTable } from "@workspace/db";
+import { eq, desc, max, sql, and } from "drizzle-orm";
+import { db, skusTable, costLinesTable, skuSnapshotsTable, ingredientsTable, ingredientPricesTable, skuProductPhotosTable, skuCertificateFilesTable, packagingItemsTable, printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
 import {
   CreateSkuBody,
   GetSkuParams,
@@ -185,6 +185,38 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
     })
   );
 
+  // Append active printing block config as a synthetic cost line
+  const [activePrintingBlock] = await db
+    .select({
+      numBlocks: skuPrintingBlockConfigsTable.numBlocks,
+      moq: skuPrintingBlockConfigsTable.moq,
+      pricePerBlock: printingBlockSuppliersTable.pricePerBlock,
+      supplierName: printingBlockSuppliersTable.name,
+    })
+    .from(skuPrintingBlockConfigsTable)
+    .innerJoin(printingBlockSuppliersTable, eq(skuPrintingBlockConfigsTable.supplierId, printingBlockSuppliersTable.id))
+    .where(and(eq(skuPrintingBlockConfigsTable.skuId, sku.id), eq(skuPrintingBlockConfigsTable.status, "active")))
+    .limit(1);
+
+  const allCostLines: any[] = [...costLinesWithPrice];
+  if (activePrintingBlock) {
+    const pricePerUnit = (activePrintingBlock.numBlocks * parseFloat(activePrintingBlock.pricePerBlock)) / activePrintingBlock.moq;
+    allCostLines.push({
+      id: null,
+      skuId: sku.id,
+      ingredientId: null,
+      packagingItemId: null,
+      ingredientName: `Printing Block (${activePrintingBlock.supplierName})`,
+      ingredientUnit: "unit",
+      ingredientCategory: "Packaging",
+      quantityPerUnit: 1,
+      notes: `${activePrintingBlock.numBlocks} blocks ÷ ${activePrintingBlock.moq.toLocaleString()} unit MOQ`,
+      currentPrice: pricePerUnit,
+      lineCost: pricePerUnit,
+      isPrintingBlock: true,
+    });
+  }
+
   const snapshots = await db
     .select()
     .from(skuSnapshotsTable)
@@ -210,7 +242,7 @@ router.get("/skus/:id", requireAuth, async (req, res): Promise<void> => {
     totalCogs,
     grossMargin,
     status,
-    costLines: costLinesWithPrice,
+    costLines: allCostLines,
     snapshots: snapshots.map((s) => ({
       ...s,
       totalCogs: parseFloat(s.totalCogs),

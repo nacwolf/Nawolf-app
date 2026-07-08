@@ -1060,14 +1060,20 @@ export default function SkuDetail({ id }: { id: string }) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {lines.map((line: any) => {
-                          const supplier = line.packagingItemId != null
+                        {lines.map((line: any, lineIdx: number) => {
+                          const isPrintingBlock = !!line.isPrintingBlock;
+                          const supplier = !isPrintingBlock && line.packagingItemId != null
                             ? pkgMap[line.packagingItemId]?.supplier
-                            : ingMap[line.ingredientId]?.supplier;
+                            : !isPrintingBlock && line.ingredientId != null
+                            ? ingMap[line.ingredientId]?.supplier
+                            : null;
                           return (
-                            <TableRow key={line.id} className="group">
+                            <TableRow key={line.id ?? `pb-${lineIdx}`} className="group">
                               <TableCell className="pl-4 py-2">
-                                <div className="text-sm font-medium">{line.ingredientName}</div>
+                                <div className="flex items-center gap-1.5">
+                                  {isPrintingBlock && <Printer className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />}
+                                  <div className="text-sm font-medium">{line.ingredientName}</div>
+                                </div>
                                 {supplier && (
                                   <div className="text-xs text-muted-foreground">{supplier}</div>
                                 )}
@@ -1076,31 +1082,40 @@ export default function SkuDetail({ id }: { id: string }) {
                                 )}
                               </TableCell>
                               <TableCell className="text-right text-sm text-muted-foreground py-2">
-                                {formatCurrency(line.currentPrice)}/{line.ingredientUnit}
+                                {isPrintingBlock
+                                  ? <span className="text-purple-600 font-medium">{formatCurrency(line.currentPrice)}/unit</span>
+                                  : <>{formatCurrency(line.currentPrice)}/{line.ingredientUnit}</>
+                                }
                               </TableCell>
                               <TableCell className="text-right text-sm py-2">
-                                {formatQty(line.quantityPerUnit, line.ingredientUnit)}
+                                {isPrintingBlock ? "—" : formatQty(line.quantityPerUnit, line.ingredientUnit)}
                               </TableCell>
                               <TableCell className="text-right text-sm font-medium py-2">
                                 {formatCurrency(line.lineCost)}
                               </TableCell>
                               <TableCell className="py-2 pr-3">
-                                <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => openEditLine(line)}
-                                    className="p-1 rounded hover:bg-muted transition-colors"
-                                    title="Edit"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteLine(line.id)}
-                                    className="p-1 rounded hover:bg-destructive/10 transition-colors"
-                                    title="Remove"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                  </button>
-                                </div>
+                                {isPrintingBlock ? (
+                                  <div className="flex items-center justify-end">
+                                    <span className="text-[10px] text-purple-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">amortized</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => openEditLine(line)}
+                                      className="p-1 rounded hover:bg-muted transition-colors"
+                                      title="Edit"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteLine(line.id)}
+                                      className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                                      title="Remove"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                    </button>
+                                  </div>
+                                )}
                               </TableCell>
                             </TableRow>
                           );
