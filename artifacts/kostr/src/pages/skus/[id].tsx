@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp, FileText, ImagePlus, X, Upload, Save, GripVertical } from "lucide-react";
+import { Trash2, Plus, Pencil, AlertTriangle, ArrowDown, ArrowUp, Search, Check, Users, Calculator, Loader2, Info, ChevronDown, ChevronUp, FileText, ImagePlus, X, Upload, Save, GripVertical, Printer } from "lucide-react";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
