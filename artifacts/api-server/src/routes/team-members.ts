@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { teamMembersTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
@@ -56,14 +56,24 @@ router.post("/team-members", requireAuth, async (req, res): Promise<void> => {
   let wageVal = "0";
   let salaryVal: string | null = null;
 
-  if (pType === "monthly") {
-    const sal = parseFloat(monthlySalary);
-    if (isNaN(sal) || sal <= 0) { res.status(400).json({ error: "monthlySalary must be > 0 for monthly pay type" }); return; }
-    salaryVal = sal.toFixed(2);
+  if (dept === "production") {
+    if (pType === "monthly") {
+      const sal = parseFloat(monthlySalary);
+      if (isNaN(sal) || sal <= 0) { res.status(400).json({ error: "monthlySalary must be > 0 for monthly production staff" }); return; }
+      salaryVal = sal.toFixed(2);
+    } else {
+      const wage = parseFloat(hourlyWage);
+      if (isNaN(wage) || wage <= 0) { res.status(400).json({ error: "hourlyWage must be > 0 for hourly production staff" }); return; }
+      wageVal = wage.toFixed(2);
+    }
   } else {
-    const wage = parseFloat(hourlyWage);
-    if (isNaN(wage) || wage <= 0) { res.status(400).json({ error: "hourlyWage must be > 0 for hourly pay type" }); return; }
-    wageVal = wage.toFixed(2);
+    if (pType === "monthly" && monthlySalary != null) {
+      const sal = parseFloat(monthlySalary);
+      if (!isNaN(sal) && sal > 0) salaryVal = sal.toFixed(2);
+    } else if (hourlyWage != null) {
+      const wage = parseFloat(hourlyWage);
+      if (!isNaN(wage) && wage >= 0) wageVal = wage.toFixed(2);
+    }
   }
 
   const [member] = await db.insert(teamMembersTable).values({
@@ -76,7 +86,12 @@ router.post("/team-members", requireAuth, async (req, res): Promise<void> => {
     oncostPercent: oncost.toFixed(2),
   }).returning();
 
-  res.status(201).json(formatMember(member));
+  let affectedSkuCount = 0;
+  if (dept === "production") {
+    affectedSkuCount = await recalculateAllSkusForTeamChange(`team_member_created:${member.id}`);
+  }
+
+  res.status(201).json({ member: formatMember(member), affectedSkuCount });
 });
 
 router.patch("/team-members/:id", requireAuth, async (req, res): Promise<void> => {
@@ -84,12 +99,18 @@ router.patch("/team-members/:id", requireAuth, async (req, res): Promise<void> =
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const { name, roleDescription, hourlyWage, monthlySalary, oncostPercent, isActive, department, payType } = req.body;
+
+  const [existing] = await db.select().from(teamMembersTable).where(eq(teamMembersTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
   const updateData: Record<string, any> = {};
 
   if (name != null) updateData.name = name.trim();
   if (roleDescription !== undefined) updateData.roleDescription = roleDescription?.trim() || null;
   if (department != null) updateData.department = department;
   if (payType != null) updateData.payType = payType;
+  if (isActive != null) updateData.isActive = isActive;
+
   if (hourlyWage != null) {
     const w = parseFloat(hourlyWage);
     if (isNaN(w) || w < 0) { res.status(400).json({ error: "hourlyWage must be >= 0" }); return; }
@@ -104,17 +125,42 @@ router.patch("/team-members/:id", requireAuth, async (req, res): Promise<void> =
     }
   }
   if (oncostPercent != null) updateData.oncostPercent = parseFloat(oncostPercent).toFixed(2);
-  if (isActive != null) updateData.isActive = isActive;
+
+  const effectiveDept = (department ?? existing.department ?? "production") as string;
+  const effectivePayType = (payType ?? existing.payType ?? "hourly") as string;
+
+  if (effectiveDept === "production") {
+    const finalWage = updateData.hourlyWage != null ? parseFloat(updateData.hourlyWage) : parseFloat(existing.hourlyWage);
+    const finalSalary = updateData.monthlySalary != null
+      ? parseFloat(updateData.monthlySalary)
+      : (existing.monthlySalary ? parseFloat(existing.monthlySalary) : null);
+
+    if (effectivePayType === "hourly" && (isNaN(finalWage) || finalWage <= 0)) {
+      res.status(400).json({ error: "hourlyWage must be > 0 for hourly production staff" }); return;
+    }
+    if (effectivePayType === "monthly" && (finalSalary == null || isNaN(finalSalary) || finalSalary <= 0)) {
+      res.status(400).json({ error: "monthlySalary must be > 0 for monthly production staff" }); return;
+    }
+  }
 
   if (Object.keys(updateData).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
 
   const [member] = await db.update(teamMembersTable).set(updateData).where(eq(teamMembersTable.id, id)).returning();
   if (!member) { res.status(404).json({ error: "Not found" }); return; }
 
-  const compensationChanged = hourlyWage != null || monthlySalary !== undefined || oncostPercent != null;
+  const wasOrIsProduction = existing.department === "production" || effectiveDept === "production";
+  const affectsLaborCost = (
+    hourlyWage != null ||
+    monthlySalary !== undefined ||
+    oncostPercent != null ||
+    isActive != null ||
+    department != null ||
+    payType != null
+  );
+
   let affectedSkuCount = 0;
-  if (compensationChanged) {
-    affectedSkuCount = await recalculateAllSkusForTeamChange(`team_member_wage_update:${id}`);
+  if (affectsLaborCost && wasOrIsProduction) {
+    affectedSkuCount = await recalculateAllSkusForTeamChange(`team_member_updated:${id}`);
   }
 
   res.json({ member: formatMember(member), affectedSkuCount });
@@ -123,8 +169,17 @@ router.patch("/team-members/:id", requireAuth, async (req, res): Promise<void> =
 router.delete("/team-members/:id", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db.select().from(teamMembersTable).where(eq(teamMembersTable.id, id));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
   const [m] = await db.update(teamMembersTable).set({ isActive: false }).where(eq(teamMembersTable.id, id)).returning();
   if (!m) { res.status(404).json({ error: "Not found" }); return; }
+
+  if (existing.department === "production") {
+    await recalculateAllSkusForTeamChange(`team_member_deactivated:${id}`);
+  }
+
   res.json(formatMember(m));
 });
 
