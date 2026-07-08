@@ -4,6 +4,11 @@ import { printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@work
 import { eq, desc, sql, inArray, and, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 
+async function getAppSetting(key: string): Promise<string | null> {
+  const [row] = await db.select({ value: appSettingsTable.value }).from(appSettingsTable).where(eq(appSettingsTable.key, key)).limit(1);
+  return row?.value ?? null;
+}
+
 export function computeMarginStatus(grossMargin: number | null): "healthy" | "review" | "critical" | "unknown" {
   if (grossMargin === null) return "unknown";
   if (grossMargin > 0.25) return "healthy";
@@ -105,6 +110,46 @@ export async function calculateOverheadPerUnit(skuId: number): Promise<number | 
   return totalMonthly / unitsPerMonth;
 }
 
+export async function calculateUtilitiesCostPerUnit(skuId: number): Promise<number | null> {
+  const [config] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
+  if (!config || !config.unitsPerDay) return null;
+
+  if (config.kwhPerUnit != null) {
+    const rateStr = await getAppSetting("electricity_rate_per_kwh");
+    if (!rateStr) return null;
+    return parseFloat(config.kwhPerUnit) * parseFloat(rateStr);
+  }
+
+  const monthlyStr = await getAppSetting("utilities_monthly_cost");
+  if (!monthlyStr) return null;
+  const monthly = parseFloat(monthlyStr);
+  if (monthly === 0) return null;
+  const daysPerMonth = config.productionDaysPerMonth ?? 20;
+  const unitsPerMonth = config.unitsPerDay * (config.cartonSize ?? 1) * daysPerMonth;
+  if (unitsPerMonth === 0) return null;
+  return monthly / unitsPerMonth;
+}
+
+export async function calculateWaterCostPerUnit(skuId: number): Promise<number | null> {
+  const [config] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
+  if (!config || !config.unitsPerDay) return null;
+
+  if (config.litersPerUnit != null) {
+    const rateStr = await getAppSetting("water_rate_per_liter");
+    if (!rateStr) return null;
+    return parseFloat(config.litersPerUnit) * parseFloat(rateStr);
+  }
+
+  const monthlyStr = await getAppSetting("water_monthly_cost");
+  if (!monthlyStr) return null;
+  const monthly = parseFloat(monthlyStr);
+  if (monthly === 0) return null;
+  const daysPerMonth = config.productionDaysPerMonth ?? 20;
+  const unitsPerMonth = config.unitsPerDay * (config.cartonSize ?? 1) * daysPerMonth;
+  if (unitsPerMonth === 0) return null;
+  return monthly / unitsPerMonth;
+}
+
 export async function updateProductionConfigLabor(skuId: number): Promise<number | null> {
   const labor = await calculateLaborCostPerUnit(skuId);
   if (labor !== null) {
@@ -139,13 +184,15 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
   }
 
   const [prodConfig] = await db
-    .select({ laborCostPerUnit: skuProductionConfigTable.laborCostPerUnit, overheadCostPerUnit: skuProductionConfigTable.overheadCostPerUnit })
+    .select({ laborCostPerUnit: skuProductionConfigTable.laborCostPerUnit, overheadCostPerUnit: skuProductionConfigTable.overheadCostPerUnit, utilitiesCostPerUnit: skuProductionConfigTable.utilitiesCostPerUnit, waterCostPerUnit: skuProductionConfigTable.waterCostPerUnit })
     .from(skuProductionConfigTable)
     .where(eq(skuProductionConfigTable.skuId, skuId))
     .limit(1);
 
   const laborCost = prodConfig?.laborCostPerUnit ? parseFloat(prodConfig.laborCostPerUnit) : null;
   const overheadCost = prodConfig?.overheadCostPerUnit ? parseFloat(prodConfig.overheadCostPerUnit) : null;
+  const utilitiesCost = prodConfig?.utilitiesCostPerUnit ? parseFloat(prodConfig.utilitiesCostPerUnit) : null;
+  const waterCost = prodConfig?.waterCostPerUnit ? parseFloat(prodConfig.waterCostPerUnit) : null;
 
   const activeBlockConfigs = await db
     .select({
@@ -157,7 +204,7 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
     .innerJoin(printingBlockSuppliersTable, eq(skuPrintingBlockConfigsTable.supplierId, printingBlockSuppliersTable.id))
     .where(and(eq(skuPrintingBlockConfigsTable.skuId, skuId), eq(skuPrintingBlockConfigsTable.status, "active")));
 
-  if (costLines.length === 0 && laborCost === null && overheadCost === null && activeBlockConfigs.length === 0) return { totalCogs: null, grossMargin: null };
+  if (costLines.length === 0 && laborCost === null && overheadCost === null && utilitiesCost === null && waterCost === null && activeBlockConfigs.length === 0) return { totalCogs: null, grossMargin: null };
 
   let totalCogs = 0;
   for (const line of costLines) {
@@ -175,6 +222,8 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
 
   if (laborCost !== null) totalCogs += laborCost;
   if (overheadCost !== null) totalCogs += overheadCost;
+  if (utilitiesCost !== null) totalCogs += utilitiesCost;
+  if (waterCost !== null) totalCogs += waterCost;
 
   for (const config of activeBlockConfigs) {
     const amortized = (config.numBlocks * parseFloat(config.pricePerBlock)) / config.moq;
@@ -216,12 +265,14 @@ export async function saveProductionConfig(
     productionDaysPerMonth: number;
     excludedMemberIds: number[];
     notes?: string | null;
+    kwhPerUnit?: number | null;
+    litersPerUnit?: number | null;
   },
   changeReason: string,
   changeNote: string | null,
   createdBy?: string
-): Promise<{ laborCostPerUnit: number | null; overheadCostPerUnit: number | null }> {
-  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes } = inputs;
+): Promise<{ laborCostPerUnit: number | null; overheadCostPerUnit: number | null; utilitiesCostPerUnit: number | null; waterCostPerUnit: number | null }> {
+  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes, kwhPerUnit, litersPerUnit } = inputs;
 
   const [existing] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
 
@@ -232,6 +283,8 @@ export async function saveProductionConfig(
       shiftHours: shiftHours.toFixed(2),
       productionDaysPerMonth,
       notes: notes || null,
+      kwhPerUnit: kwhPerUnit != null ? kwhPerUnit.toFixed(4) : null,
+      litersPerUnit: litersPerUnit != null ? litersPerUnit.toFixed(4) : null,
       updatedAt: new Date(),
     }).where(eq(skuProductionConfigTable.skuId, skuId));
   } else {
@@ -242,6 +295,8 @@ export async function saveProductionConfig(
       shiftHours: shiftHours.toFixed(2),
       productionDaysPerMonth,
       notes: notes || null,
+      kwhPerUnit: kwhPerUnit != null ? kwhPerUnit.toFixed(4) : null,
+      litersPerUnit: litersPerUnit != null ? litersPerUnit.toFixed(4) : null,
     });
   }
 
@@ -252,10 +307,14 @@ export async function saveProductionConfig(
 
   const laborCost = await calculateLaborCostPerUnit(skuId);
   const overheadCost = await calculateOverheadPerUnit(skuId);
+  const utilitiesCostComputed = await calculateUtilitiesCostPerUnit(skuId);
+  const waterCostComputed = await calculateWaterCostPerUnit(skuId);
 
   await db.update(skuProductionConfigTable).set({
     laborCostPerUnit: laborCost !== null ? laborCost.toFixed(6) : null,
     overheadCostPerUnit: overheadCost !== null ? overheadCost.toFixed(6) : null,
+    utilitiesCostPerUnit: utilitiesCostComputed !== null ? utilitiesCostComputed.toFixed(6) : null,
+    waterCostPerUnit: waterCostComputed !== null ? waterCostComputed.toFixed(6) : null,
     updatedAt: new Date(),
   }).where(eq(skuProductionConfigTable.skuId, skuId));
 
@@ -289,7 +348,7 @@ export async function saveProductionConfig(
 
   await snapshotSku(skuId, "production_config_updated");
 
-  return { laborCostPerUnit: laborCost, overheadCostPerUnit: overheadCost };
+  return { laborCostPerUnit: laborCost, overheadCostPerUnit: overheadCost, utilitiesCostPerUnit: utilitiesCostComputed, waterCostPerUnit: waterCostComputed };
 }
 
 export async function recalculateOverheadForAllSkus(triggeredBy: string): Promise<number> {
@@ -298,8 +357,12 @@ export async function recalculateOverheadForAllSkus(triggeredBy: string): Promis
   for (const config of configs) {
     if (!config.unitsPerDay) continue;
     const overheadCost = await calculateOverheadPerUnit(config.skuId);
+    const utilitiesCost = await calculateUtilitiesCostPerUnit(config.skuId);
+    const waterCost = await calculateWaterCostPerUnit(config.skuId);
     await db.update(skuProductionConfigTable).set({
       overheadCostPerUnit: overheadCost !== null ? overheadCost.toFixed(6) : null,
+      utilitiesCostPerUnit: utilitiesCost !== null ? utilitiesCost.toFixed(6) : null,
+      waterCostPerUnit: waterCost !== null ? waterCost.toFixed(6) : null,
       updatedAt: new Date(),
     }).where(eq(skuProductionConfigTable.skuId, config.skuId));
     await snapshotSku(config.skuId, triggeredBy);

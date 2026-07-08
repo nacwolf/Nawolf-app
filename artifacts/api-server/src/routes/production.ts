@@ -87,6 +87,10 @@ router.get("/skus/:id/production-config", requireAuth, async (req, res): Promise
       productionDaysPerMonth: config.productionDaysPerMonth ?? 20,
       laborCostPerUnit: config.laborCostPerUnit ? parseFloat(config.laborCostPerUnit) : null,
       overheadCostPerUnit: config.overheadCostPerUnit ? parseFloat(config.overheadCostPerUnit) : null,
+      kwhPerUnit: config.kwhPerUnit ? parseFloat(config.kwhPerUnit) : null,
+      litersPerUnit: config.litersPerUnit ? parseFloat(config.litersPerUnit) : null,
+      utilitiesCostPerUnit: config.utilitiesCostPerUnit ? parseFloat(config.utilitiesCostPerUnit) : null,
+      waterCostPerUnit: config.waterCostPerUnit ? parseFloat(config.waterCostPerUnit) : null,
     }
   });
 });
@@ -96,20 +100,22 @@ router.post("/skus/:id/production-config", requireAuth, async (req, res): Promis
   if (isNaN(skuId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const auth = getAuth(req);
-  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes, changeReason, changeNote } = req.body;
+  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes, changeReason, changeNote, kwhPerUnit, litersPerUnit } = req.body;
 
   const uPD = unitsPerDay != null ? parseInt(unitsPerDay, 10) : null;
   const cS = cartonSize != null ? parseInt(cartonSize, 10) : 1;
   const sH = shiftHours != null ? parseFloat(shiftHours) : 8;
   const dPM = productionDaysPerMonth != null ? parseInt(productionDaysPerMonth, 10) : 20;
   const excludedIds: number[] = Array.isArray(excludedMemberIds) ? excludedMemberIds.map(Number).filter(n => !isNaN(n)) : [];
+  const kPU = kwhPerUnit != null ? parseFloat(kwhPerUnit) : null;
+  const lPU = litersPerUnit != null ? parseFloat(litersPerUnit) : null;
 
   const reason = changeReason || "initial";
   const note = changeNote || null;
 
-  const { laborCostPerUnit, overheadCostPerUnit } = await saveProductionConfig(
+  const { laborCostPerUnit, overheadCostPerUnit, utilitiesCostPerUnit, waterCostPerUnit } = await saveProductionConfig(
     skuId,
-    { unitsPerDay: uPD, cartonSize: cS, shiftHours: sH, productionDaysPerMonth: dPM, excludedMemberIds: excludedIds, notes },
+    { unitsPerDay: uPD, cartonSize: cS, shiftHours: sH, productionDaysPerMonth: dPM, excludedMemberIds: excludedIds, notes, kwhPerUnit: kPU, litersPerUnit: lPU },
     reason,
     note,
     auth.userId
@@ -168,11 +174,15 @@ router.post("/skus/:id/production-config", requireAuth, async (req, res): Promis
       productionDaysPerMonth: config.productionDaysPerMonth ?? 20,
       laborCostPerUnit,
       overheadCostPerUnit,
+      utilitiesCostPerUnit,
+      waterCostPerUnit,
     } : null,
     excludedMemberIds: excludedIds,
     allProductionMembers: formattedMembers,
     laborCostPerUnit,
     overheadCostPerUnit,
+    utilitiesCostPerUnit,
+    waterCostPerUnit,
     explanation,
   });
 });

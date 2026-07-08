@@ -315,6 +315,9 @@ export default function SkuDetail({ id }: { id: string }) {
   const [changeReason, setChangeReason] = useState<string>("");
   const [changeNote, setChangeNote] = useState<string>("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [prodKwhPerUnit, setProdKwhPerUnit] = useState("");
+  const [prodLitersPerUnit, setProdLitersPerUnit] = useState("");
+  const [showAdvancedProd, setShowAdvancedProd] = useState(false);
 
   // ── New spec sections ──
   const [specOpen, setSpecOpen] = useState<Record<string, boolean>>({ II: false, III: false, IV: false, V: false, VI: false, VII: false });
@@ -563,6 +566,8 @@ export default function SkuDetail({ id }: { id: string }) {
         setProdCartonSize(String(prodConfig.config.cartonSize ?? "1"));
         setProdShiftHours(String(prodConfig.config.shiftHours ?? "8"));
         setProdDaysPerMonth(String(prodConfig.config.productionDaysPerMonth ?? "20"));
+        setProdKwhPerUnit((prodConfig.config as any).kwhPerUnit != null ? String((prodConfig.config as any).kwhPerUnit) : "");
+        setProdLitersPerUnit((prodConfig.config as any).litersPerUnit != null ? String((prodConfig.config as any).litersPerUnit) : "");
       }
     }
   }, [prodConfig, prodInitialized]);
@@ -589,6 +594,8 @@ export default function SkuDetail({ id }: { id: string }) {
           shiftHours: parseFloat(prodShiftHours) || 8,
           productionDaysPerMonth: parseInt(prodDaysPerMonth) || 20,
           excludedMemberIds: prodExcludedMemberIds,
+          kwhPerUnit: prodKwhPerUnit !== "" ? parseFloat(prodKwhPerUnit) : null,
+          litersPerUnit: prodLitersPerUnit !== "" ? parseFloat(prodLitersPerUnit) : null,
           changeReason: reason,
           changeNote: changeNote || null,
         }),
@@ -1237,7 +1244,7 @@ export default function SkuDetail({ id }: { id: string }) {
           <div className="flex items-center gap-2">
             {(hasLaborSetup || hasOverheadSetup) && (
               <Badge className="bg-orange-100 text-orange-800 border-0 text-xs">
-                {formatCurrency((prodConfig?.config?.laborCostPerUnit ?? 0) + (prodConfig?.config?.overheadCostPerUnit ?? 0))}/unit
+                {formatCurrency((prodConfig?.config?.laborCostPerUnit ?? 0) + (prodConfig?.config?.overheadCostPerUnit ?? 0) + ((prodConfig?.config as any)?.utilitiesCostPerUnit ?? 0) + ((prodConfig?.config as any)?.waterCostPerUnit ?? 0))}/unit
               </Badge>
             )}
             {prodSectionOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -1399,15 +1406,25 @@ export default function SkuDetail({ id }: { id: string }) {
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Overhead / unit</div>
-                    <div className="text-base font-bold text-slate-600">{prodConfig?.config?.overheadCostPerUnit != null ? formatCurrency(prodConfig.config.overheadCostPerUnit) : "—"}</div>
+                    <div className="text-base font-bold text-slate-600">{(prodConfig?.config as any)?.overheadCostPerUnit != null ? formatCurrency((prodConfig?.config as any).overheadCostPerUnit) : "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">from saved config</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Utilities / unit</div>
+                    <div className="text-base font-bold text-slate-600">{(prodConfig?.config as any)?.utilitiesCostPerUnit != null ? formatCurrency((prodConfig?.config as any).utilitiesCostPerUnit) : "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">from saved config</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Water / unit</div>
+                    <div className="text-base font-bold text-slate-600">{(prodConfig?.config as any)?.waterCostPerUnit != null ? formatCurrency((prodConfig?.config as any).waterCostPerUnit) : "—"}</div>
                     <div className="text-[10px] text-muted-foreground">from saved config</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Combined pre-ingredient</div>
                     <div className="text-base font-bold text-slate-700">
-                      {previewLaborCost !== null ? formatCurrency(previewLaborCost + (prodConfig?.config?.overheadCostPerUnit ?? 0)) : "—"}
+                      {previewLaborCost !== null ? formatCurrency(previewLaborCost + ((prodConfig?.config as any)?.overheadCostPerUnit ?? 0) + ((prodConfig?.config as any)?.utilitiesCostPerUnit ?? 0) + ((prodConfig?.config as any)?.waterCostPerUnit ?? 0)) : "—"}
                     </div>
-                    <div className="text-[10px] text-muted-foreground">labor + overhead</div>
+                    <div className="text-[10px] text-muted-foreground">labor + overhead + utilities + water</div>
                   </div>
                 </div>
                 {previewLaborCost !== null && (
@@ -1422,6 +1439,50 @@ export default function SkuDetail({ id }: { id: string }) {
                 )}
               </div>
             )}
+
+            {/* Advanced: per-SKU consumption overrides */}
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedProd(o => !o)}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showAdvancedProd ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                Advanced: per-SKU consumption overrides
+              </button>
+              {showAdvancedProd && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-muted-foreground">Leave blank to use global monthly allocation. Set a value to override with an exact consumption rate for this product.</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">kWh per unit</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        placeholder="e.g. 0.05"
+                        value={prodKwhPerUnit}
+                        onChange={e => { setProdKwhPerUnit(e.target.value); setProdDirty(true); }}
+                        className="h-9"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-1.5 block">Liters per unit</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        placeholder="e.g. 0.2"
+                        value={prodLitersPerUnit}
+                        onChange={e => { setProdLitersPerUnit(e.target.value); setProdDirty(true); }}
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Set electricity and water rates in Cost Library → Utilities &amp; Water.</p>
+                </div>
+              )}
+            </div>
 
             {/* Change reason tiles — only shown on subsequent saves */}
             {!isFirstSave && prodDirty && (

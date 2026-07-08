@@ -24,6 +24,10 @@ export const skuProductionConfigTable = pgTable("sku_production_config", {
   notes: text("notes"),
   laborCostPerUnit: numeric("labor_cost_per_unit", { precision: 12, scale: 6 }),
   overheadCostPerUnit: numeric("overhead_cost_per_unit", { precision: 12, scale: 6 }),
+  kwhPerUnit: numeric("kwh_per_unit", { precision: 10, scale: 4 }),
+  litersPerUnit: numeric("liters_per_unit", { precision: 10, scale: 4 }),
+  utilitiesCostPerUnit: numeric("utilities_cost_per_unit", { precision: 12, scale: 6 }),
+  waterCostPerUnit: numeric("water_cost_per_unit", { precision: 12, scale: 6 }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

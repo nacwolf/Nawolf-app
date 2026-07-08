@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { overheadItemsTable, appSettingsTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
@@ -38,6 +38,10 @@ router.get("/overhead", requireAuth, async (req, res): Promise<void> => {
     return s + (freq === "annual" ? amount / 12 : amount);
   }, 0);
 
+  const utilitySettings = await db.select().from(appSettingsTable)
+    .where(inArray(appSettingsTable.key, ["utilities_monthly_cost", "water_monthly_cost", "electricity_rate_per_kwh", "water_rate_per_liter"]));
+  const settingsMap = Object.fromEntries(utilitySettings.map(s => [s.key, s.value ? parseFloat(s.value) : null]));
+
   res.json({
     items: items.map(i => ({
       ...i,
@@ -47,6 +51,10 @@ router.get("/overhead", requireAuth, async (req, res): Promise<void> => {
     operatingDaysPerYear,
     daysPerMonth,
     totalMonthly: parseFloat(totalMonthly.toFixed(2)),
+    utilitiesMonthly: settingsMap["utilities_monthly_cost"] ?? null,
+    waterMonthly: settingsMap["water_monthly_cost"] ?? null,
+    electricityRatePerKwh: settingsMap["electricity_rate_per_kwh"] ?? null,
+    waterRatePerLiter: settingsMap["water_rate_per_liter"] ?? null,
   });
 });
 
@@ -117,6 +125,23 @@ router.patch("/overhead/settings", requireAuth, async (req, res): Promise<void> 
   const daysPerMonth = parseFloat((days / 12).toFixed(1));
 
   res.json({ operatingDaysPerYear: days, daysPerMonth, affectedSkuCount });
+});
+
+router.patch("/overhead/utilities", requireAuth, async (req, res): Promise<void> => {
+  const { utilitiesMonthly, waterMonthly, electricityRatePerKwh, waterRatePerLiter } = req.body;
+  const pairs: Array<{ key: string; val: number }> = [];
+  if (utilitiesMonthly != null) pairs.push({ key: "utilities_monthly_cost", val: parseFloat(utilitiesMonthly) });
+  if (waterMonthly != null) pairs.push({ key: "water_monthly_cost", val: parseFloat(waterMonthly) });
+  if (electricityRatePerKwh != null) pairs.push({ key: "electricity_rate_per_kwh", val: parseFloat(electricityRatePerKwh) });
+  if (waterRatePerLiter != null) pairs.push({ key: "water_rate_per_liter", val: parseFloat(waterRatePerLiter) });
+
+  for (const { key, val } of pairs) {
+    await db.insert(appSettingsTable).values({ key, value: String(val), updatedAt: new Date() })
+      .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: String(val), updatedAt: new Date() } });
+  }
+
+  const affectedSkuCount = await recalculateOverheadForAllSkus("utilities_settings_updated");
+  res.json({ affectedSkuCount });
 });
 
 export default router;

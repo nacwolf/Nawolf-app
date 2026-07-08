@@ -96,7 +96,7 @@ export default function CostLibrary() {
     queryKey: ["overhead"],
     queryFn: async () => {
       const r = await fetch(getApiUrl("/overhead"));
-      return r.json() as Promise<{ items: OverheadItem[]; operatingDaysPerYear: number; daysPerMonth: number; totalMonthly: number }>;
+      return r.json() as Promise<{ items: OverheadItem[]; operatingDaysPerYear: number; daysPerMonth: number; totalMonthly: number; utilitiesMonthly: number | null; waterMonthly: number | null; electricityRatePerKwh: number | null; waterRatePerLiter: number | null }>;
     },
   });
 
@@ -105,6 +105,10 @@ export default function CostLibrary() {
   const [freqEdits, setFreqEdits] = useState<Record<number, string>>({});
   const [operatingDaysInput, setOperatingDaysInput] = useState<string>("");
   const [isSavingOverhead, setIsSavingOverhead] = useState(false);
+  const [utilitiesMonthlyInput, setUtilitiesMonthlyInput] = useState("");
+  const [waterMonthlyInput, setWaterMonthlyInput] = useState("");
+  const [electricityRateInput, setElectricityRateInput] = useState("");
+  const [waterRateInput, setWaterRateInput] = useState("");
 
   const operatingDaysDisplay = operatingDaysInput !== "" ? parseInt(operatingDaysInput) || 0 : (overheadData?.operatingDaysPerYear ?? 250);
   const liveDaysPerMonth = parseFloat((operatingDaysDisplay / 12).toFixed(1));
@@ -238,9 +242,27 @@ export default function CostLibrary() {
         const result = await r.json();
         totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
       }
+      if (utilitiesMonthlyInput || waterMonthlyInput || electricityRateInput || waterRateInput) {
+        const payload: any = {};
+        if (utilitiesMonthlyInput) payload.utilitiesMonthly = parseFloat(utilitiesMonthlyInput);
+        if (waterMonthlyInput) payload.waterMonthly = parseFloat(waterMonthlyInput);
+        if (electricityRateInput) payload.electricityRatePerKwh = parseFloat(electricityRateInput);
+        if (waterRateInput) payload.waterRatePerLiter = parseFloat(waterRateInput);
+        const r = await fetch(getApiUrl("/overhead/utilities"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const result = await r.json();
+        totalAffected = Math.max(totalAffected, result.affectedSkuCount ?? 0);
+      }
       setOverheadEdits({});
       setFreqEdits({});
       setOperatingDaysInput("");
+      setUtilitiesMonthlyInput("");
+      setWaterMonthlyInput("");
+      setElectricityRateInput("");
+      setWaterRateInput("");
       qc.invalidateQueries({ queryKey: ["overhead"] });
       qc.invalidateQueries({ queryKey: ["production-config"] });
       toast({
@@ -406,6 +428,49 @@ export default function CostLibrary() {
                     })}
                   </TableBody>
                 </Table>
+
+                <div className="px-6 py-5 border-t">
+                  <div className="text-sm font-semibold text-slate-700 mb-1">Utilities &amp; Water</div>
+                  <p className="text-xs text-muted-foreground mb-3">Leave blank to exclude. SKUs with an advanced consumption override use the rate fields instead of monthly totals.</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Monthly utilities cost (฿/month)</label>
+                      <Input
+                        type="number" step="0.01" min="0" className="h-8 text-sm"
+                        placeholder={overheadData?.utilitiesMonthly != null ? String(overheadData.utilitiesMonthly) : "e.g. 5000"}
+                        value={utilitiesMonthlyInput}
+                        onChange={e => setUtilitiesMonthlyInput(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Monthly water cost (฿/month)</label>
+                      <Input
+                        type="number" step="0.01" min="0" className="h-8 text-sm"
+                        placeholder={overheadData?.waterMonthly != null ? String(overheadData.waterMonthly) : "e.g. 1000"}
+                        value={waterMonthlyInput}
+                        onChange={e => setWaterMonthlyInput(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Electricity rate (฿/kWh)</label>
+                      <Input
+                        type="number" step="0.001" min="0" className="h-8 text-sm"
+                        placeholder={overheadData?.electricityRatePerKwh != null ? String(overheadData.electricityRatePerKwh) : "e.g. 4.5"}
+                        value={electricityRateInput}
+                        onChange={e => setElectricityRateInput(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground block mb-1">Water rate (฿/liter)</label>
+                      <Input
+                        type="number" step="0.001" min="0" className="h-8 text-sm"
+                        placeholder={overheadData?.waterRatePerLiter != null ? String(overheadData.waterRatePerLiter) : "e.g. 0.02"}
+                        value={waterRateInput}
+                        onChange={e => setWaterRateInput(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
 
                 <div className="px-6 py-4 bg-slate-50 border-t flex items-center justify-between gap-4">
                   <p className="text-xs text-muted-foreground">"Save &amp; apply" recalculates overhead for every SKU that has a production setup.</p>
