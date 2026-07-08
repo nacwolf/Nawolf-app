@@ -309,7 +309,7 @@ export default function SkuDetail({ id }: { id: string }) {
   const [prodCartonSize, setProdCartonSize] = useState<string>("1");
   const [prodShiftHours, setProdShiftHours] = useState<string>("8");
   const [prodDaysPerMonth, setProdDaysPerMonth] = useState<string>("20");
-  const [prodMemberIds, setProdMemberIds] = useState<number[]>([]);
+  const [prodExcludedMemberIds, setProdExcludedMemberIds] = useState<number[]>([]);
   const [prodSectionOpen, setProdSectionOpen] = useState(false);
   const [prodInitialized, setProdInitialized] = useState(false);
   const [prodDirty, setProdDirty] = useState(false);
@@ -530,21 +530,24 @@ export default function SkuDetail({ id }: { id: string }) {
   const addIsPrintingBlock = (addItem as any)?.pkgCategory === "printing_block";
   const editIsPrintingBlock = (editItem as any)?.pkgCategory === "printing_block";
 
-  const { data: teamMembers } = useQuery({
-    queryKey: ["team-members"],
-    queryFn: async () => {
-      const r = await fetch(getApiUrl("/team-members"));
-      return r.json() as Promise<{ id: number; name: string; roleDescription: string | null; hourlyWage: number; oncostPercent: number; loadedRate: number; isActive: boolean }[]>;
-    },
-  });
-
   const { data: prodConfig, refetch: refetchProdConfig } = useQuery({
     queryKey: ["production-config", skuId],
     queryFn: async () => {
       const r = await fetch(getApiUrl(`/skus/${skuId}/production-config`));
       return r.json() as Promise<{
         config: any;
-        teamMemberIds: number[];
+        excludedMemberIds: number[];
+        allProductionMembers: {
+          id: number;
+          name: string;
+          roleDescription: string | null;
+          payType: "hourly" | "monthly";
+          hourlyWage: number;
+          monthlySalary: number | null;
+          oncostPercent: number;
+          loadedRate: number;
+          excluded: boolean;
+        }[];
         operatingDaysPerYear: number;
         daysPerMonth: number;
       }>;
@@ -555,7 +558,7 @@ export default function SkuDetail({ id }: { id: string }) {
   useMemo(() => {
     if (!prodInitialized && prodConfig) {
       setProdInitialized(true);
-      setProdMemberIds(prodConfig.teamMemberIds ?? []);
+      setProdExcludedMemberIds(prodConfig.excludedMemberIds ?? []);
       if (prodConfig.config) {
         setProdUnitsPerDay(String(prodConfig.config.unitsPerDay ?? ""));
         setProdCartonSize(String(prodConfig.config.cartonSize ?? "1"));
@@ -586,7 +589,7 @@ export default function SkuDetail({ id }: { id: string }) {
           cartonSize: parseInt(prodCartonSize) || 1,
           shiftHours: parseFloat(prodShiftHours) || 8,
           productionDaysPerMonth: parseInt(prodDaysPerMonth) || 20,
-          teamMemberIds: prodMemberIds,
+          excludedMemberIds: prodExcludedMemberIds,
           changeReason: reason,
           changeNote: changeNote || null,
         }),
@@ -604,16 +607,28 @@ export default function SkuDetail({ id }: { id: string }) {
     }
   }
 
+  const allProductionMembers = prodConfig?.allProductionMembers ?? [];
+
   const previewLaborCost = useMemo(() => {
     const upd = parseInt(prodUnitsPerDay) || 0;
     const cs = parseInt(prodCartonSize) || 1;
     const sh = parseFloat(prodShiftHours) || 8;
+    const dpm = parseInt(prodDaysPerMonth) || 20;
     const totalUnits = upd * cs;
-    if (!teamMembers || prodMemberIds.length === 0 || totalUnits === 0) return null;
-    const selected = teamMembers.filter(m => prodMemberIds.includes(m.id));
-    const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
-    return (totalRate * sh) / totalUnits;
-  }, [teamMembers, prodMemberIds, prodUnitsPerDay, prodCartonSize, prodShiftHours]);
+    if (allProductionMembers.length === 0 || totalUnits === 0) return null;
+    const included = allProductionMembers.filter(m => !prodExcludedMemberIds.includes(m.id));
+    if (included.length === 0) return null;
+    let total = 0;
+    for (const m of included) {
+      const oncost = m.oncostPercent / 100;
+      if (m.payType === "monthly" && m.monthlySalary != null) {
+        total += (m.monthlySalary * (1 + oncost)) / dpm / totalUnits;
+      } else {
+        total += (m.hourlyWage * (1 + oncost) * sh) / totalUnits;
+      }
+    }
+    return total;
+  }, [allProductionMembers, prodExcludedMemberIds, prodUnitsPerDay, prodCartonSize, prodShiftHours, prodDaysPerMonth]);
 
   const previewMonthlyUnits = useMemo(() => {
     const upd = parseInt(prodUnitsPerDay) || 0;
@@ -1236,29 +1251,36 @@ export default function SkuDetail({ id }: { id: string }) {
                 <span className="text-sm font-semibold">1. Who works on this product?</span>
                 <Tooltip>
                   <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
-                  <TooltipContent className="max-w-60 text-xs">Select everyone who touches this product during production. Their loaded hourly rates will be added together.</TooltipContent>
+                  <TooltipContent className="max-w-60 text-xs">All production staff are included by default. Uncheck anyone not involved in making this specific product.</TooltipContent>
                 </Tooltip>
               </div>
-              {(teamMembers?.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">No team members yet. Add them in the <Link href="/ingredients" className="text-primary hover:underline">Cost Library</Link>.</p>
+              {allProductionMembers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No production staff yet. Add them in the <Link href="/team-members" className="text-primary hover:underline">Team page</Link>.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {teamMembers?.filter(m => m.isActive).map(m => (
-                    <label key={m.id} className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${prodMemberIds.includes(m.id) ? "border-orange-300 bg-orange-50" : ""}`}>
-                      <Checkbox
-                        checked={prodMemberIds.includes(m.id)}
-                        onCheckedChange={(checked) => {
-                          setProdMemberIds(prev => checked ? [...prev, m.id] : prev.filter(id => id !== m.id));
-                          setProdDirty(true);
-                        }}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">{m.name}</div>
-                        {m.roleDescription && <div className="text-xs text-muted-foreground truncate">{m.roleDescription}</div>}
-                      </div>
-                      <div className="text-xs text-orange-700 font-medium flex-shrink-0">{formatCurrency(m.loadedRate)}/hr</div>
-                    </label>
-                  ))}
+                  {allProductionMembers.map(m => {
+                    const isIncluded = !prodExcludedMemberIds.includes(m.id);
+                    return (
+                      <label key={m.id} className={`flex items-center gap-3 border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors ${isIncluded ? "border-orange-300 bg-orange-50" : "opacity-50"}`}>
+                        <Checkbox
+                          checked={isIncluded}
+                          onCheckedChange={(checked) => {
+                            setProdExcludedMemberIds(prev => checked ? prev.filter(id => id !== m.id) : [...prev, m.id]);
+                            setProdDirty(true);
+                          }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate">{m.name}</div>
+                          {m.roleDescription && <div className="text-xs text-muted-foreground truncate">{m.roleDescription}</div>}
+                        </div>
+                        <div className="text-xs text-orange-700 font-medium flex-shrink-0">
+                          {m.payType === "monthly"
+                            ? `฿${(m.monthlySalary ?? 0).toLocaleString()}/mo`
+                            : `${formatCurrency(m.loadedRate)}/hr`}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1390,10 +1412,10 @@ export default function SkuDetail({ id }: { id: string }) {
                 {previewLaborCost !== null && (
                   <div className="text-xs text-muted-foreground border-t border-orange-200 pt-2">
                     {(() => {
-                      const selected = teamMembers?.filter(m => prodMemberIds.includes(m.id)) ?? [];
-                      const totalRate = selected.reduce((s, m) => s + m.hourlyWage * (1 + m.oncostPercent / 100), 0);
+                      const included = allProductionMembers.filter(m => !prodExcludedMemberIds.includes(m.id));
                       const totalUnits = (parseInt(prodUnitsPerDay) || 0) * (parseInt(prodCartonSize) || 1);
-                      return `${selected.map(m => m.name).join(", ")} · ฿${totalRate.toFixed(2)}/hr × ${parseFloat(prodShiftHours) || 8} hrs ÷ ${totalUnits} units`;
+                      const names = included.map(m => m.name).join(", ");
+                      return `${names} · ${totalUnits} units/day`;
                     })()}
                   </div>
                 )}

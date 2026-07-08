@@ -1,7 +1,7 @@
 import { db, ingredientsTable, ingredientPricesTable, skusTable, costLinesTable, skuSnapshotsTable, packagingItemsTable } from "@workspace/db";
 import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable, overheadItemsTable, appSettingsTable, productionConfigHistoryTable } from "@workspace/db";
 import { printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
-import { eq, desc, sql, inArray, and } from "drizzle-orm";
+import { eq, desc, sql, inArray, and, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 
 export function computeMarginStatus(grossMargin: number | null): "healthy" | "review" | "critical" | "unknown" {
@@ -30,25 +30,48 @@ export async function calculateLaborCostPerUnit(skuId: number): Promise<number |
 
   if (!config || !config.unitsPerDay) return null;
 
-  const members = await db
-    .select({ hourlyWage: teamMembersTable.hourlyWage, oncostPercent: teamMembersTable.oncostPercent })
+  const excludedRows = await db
+    .select({ teamMemberId: skuTeamMembersTable.teamMemberId })
     .from(skuTeamMembersTable)
-    .innerJoin(teamMembersTable, eq(skuTeamMembersTable.teamMemberId, teamMembersTable.id))
     .where(eq(skuTeamMembersTable.skuId, skuId));
+  const excludedIds = excludedRows.map(r => r.teamMemberId);
 
+  let membersQuery = db
+    .select({
+      hourlyWage: teamMembersTable.hourlyWage,
+      monthlySalary: teamMembersTable.monthlySalary,
+      oncostPercent: teamMembersTable.oncostPercent,
+      payType: teamMembersTable.payType,
+    })
+    .from(teamMembersTable)
+    .where(
+      and(
+        eq(teamMembersTable.isActive, true),
+        eq(teamMembersTable.department, "production"),
+        ...(excludedIds.length > 0 ? [notInArray(teamMembersTable.id, excludedIds)] : [])
+      )
+    );
+
+  const members = await membersQuery;
   if (members.length === 0) return null;
-
-  const totalLoadedRate = members.reduce((sum, m) => {
-    const wage = parseFloat(m.hourlyWage);
-    const oncost = parseFloat(m.oncostPercent) / 100;
-    return sum + wage * (1 + oncost);
-  }, 0);
 
   const shiftHours = parseFloat(config.shiftHours ?? "8");
   const totalDayUnits = config.unitsPerDay * (config.cartonSize ?? 1);
-  const laborPerUnit = (totalLoadedRate * shiftHours) / totalDayUnits;
+  const daysPerMonth = config.productionDaysPerMonth ?? 20;
 
-  return laborPerUnit;
+  let totalLaborPerUnit = 0;
+  for (const m of members) {
+    const oncost = parseFloat(m.oncostPercent) / 100;
+    if ((m.payType ?? "hourly") === "monthly" && m.monthlySalary) {
+      const dailyCost = parseFloat(m.monthlySalary) * (1 + oncost) / daysPerMonth;
+      totalLaborPerUnit += dailyCost / totalDayUnits;
+    } else {
+      const loadedRate = parseFloat(m.hourlyWage) * (1 + oncost);
+      totalLaborPerUnit += (loadedRate * shiftHours) / totalDayUnits;
+    }
+  }
+
+  return totalLaborPerUnit;
 }
 
 export async function calculateOverheadPerUnit(skuId: number): Promise<number | null> {
@@ -108,7 +131,6 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
       .from(costLinesTable)
       .where(eq(costLinesTable.skuId, skuId));
   } catch {
-    // packaging_item_id column not yet migrated — fall back to ingredient-only
     const rows = await db
       .select({ ingredientId: costLinesTable.ingredientId, quantityPerUnit: costLinesTable.quantityPerUnit })
       .from(costLinesTable)
@@ -192,14 +214,14 @@ export async function saveProductionConfig(
     cartonSize: number;
     shiftHours: number;
     productionDaysPerMonth: number;
-    teamMemberIds: number[];
+    excludedMemberIds: number[];
     notes?: string | null;
   },
   changeReason: string,
   changeNote: string | null,
   createdBy?: string
 ): Promise<{ laborCostPerUnit: number | null; overheadCostPerUnit: number | null }> {
-  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, teamMemberIds, notes } = inputs;
+  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes } = inputs;
 
   const [existing] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
 
@@ -224,8 +246,8 @@ export async function saveProductionConfig(
   }
 
   await db.delete(skuTeamMembersTable).where(eq(skuTeamMembersTable.skuId, skuId));
-  if (teamMemberIds.length > 0) {
-    await db.insert(skuTeamMembersTable).values(teamMemberIds.map(tid => ({ skuId, teamMemberId: tid })));
+  if (excludedMemberIds.length > 0) {
+    await db.insert(skuTeamMembersTable).values(excludedMemberIds.map(tid => ({ skuId, teamMemberId: tid })));
   }
 
   const laborCost = await calculateLaborCostPerUnit(skuId);
@@ -243,6 +265,12 @@ export async function saveProductionConfig(
     ? (laborCost * totalDayUnits).toFixed(4)
     : null;
 
+  const allProductionMembers = await db
+    .select({ id: teamMembersTable.id })
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.isActive, true), eq(teamMembersTable.department, "production")));
+  const includedIds = allProductionMembers.map(m => m.id).filter(id => !excludedMemberIds.includes(id));
+
   await db.insert(productionConfigHistoryTable).values({
     skuId,
     effectiveDate: today,
@@ -250,7 +278,7 @@ export async function saveProductionConfig(
     cartonSize,
     shiftHours: shiftHours.toFixed(2),
     productionDaysPerMonth,
-    teamMemberIds: JSON.stringify(teamMemberIds),
+    teamMemberIds: JSON.stringify(includedIds),
     laborPerUnit: laborCost !== null ? laborCost.toFixed(6) : null,
     overheadPerUnit: overheadCost !== null ? overheadCost.toFixed(6) : null,
     totalDayCost,
@@ -296,14 +324,10 @@ export async function recalculateAllSkusUsingIngredient(ingredientId: number, tr
   return skuIds.length;
 }
 
-export async function recalculateAllSkusUsingTeamMember(teamMemberId: number, triggeredBy: string): Promise<number> {
-  const affected = await db
-    .selectDistinct({ skuId: skuTeamMembersTable.skuId })
-    .from(skuTeamMembersTable)
-    .where(eq(skuTeamMembersTable.teamMemberId, teamMemberId));
-
-  const skuIds = affected.map((r) => r.skuId);
-  logger.info({ teamMemberId, skuIds, count: skuIds.length }, "Recalculating SKUs after team member wage update");
+export async function recalculateAllSkusForTeamChange(triggeredBy: string): Promise<number> {
+  const configs = await db.select({ skuId: skuProductionConfigTable.skuId }).from(skuProductionConfigTable);
+  const skuIds = configs.map(c => c.skuId);
+  logger.info({ skuIds, count: skuIds.length }, "Recalculating all SKUs after team member change");
 
   for (const skuId of skuIds) {
     const laborCost = await calculateLaborCostPerUnit(skuId);
@@ -317,6 +341,10 @@ export async function recalculateAllSkusUsingTeamMember(teamMemberId: number, tr
   }
 
   return skuIds.length;
+}
+
+export async function recalculateAllSkusUsingTeamMember(teamMemberId: number, triggeredBy: string): Promise<number> {
+  return recalculateAllSkusForTeamChange(triggeredBy);
 }
 
 export async function getSkuWithMargin(skuId: number) {

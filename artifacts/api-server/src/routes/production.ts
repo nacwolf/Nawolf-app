@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, appSettingsTable } from "@workspace/db";
 import { skuProductionConfigTable, skuTeamMembersTable, teamMembersTable } from "@workspace/db";
 import { getAuth } from "@clerk/express";
@@ -23,12 +23,17 @@ router.get("/skus/:id/production-config", requireAuth, async (req, res): Promise
     .where(eq(skuProductionConfigTable.skuId, skuId))
     .limit(1);
 
-  const teamMemberRows = await db
+  const excludedRows = await db
     .select({ teamMemberId: skuTeamMembersTable.teamMemberId })
     .from(skuTeamMembersTable)
     .where(eq(skuTeamMembersTable.skuId, skuId));
+  const excludedMemberIds = excludedRows.map(r => r.teamMemberId);
 
-  const teamMemberIds = teamMemberRows.map(r => r.teamMemberId);
+  const allProductionMembers = await db
+    .select()
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.isActive, true), eq(teamMembersTable.department, "production")))
+    .orderBy(teamMembersTable.createdAt);
 
   const [daysSetting] = await db
     .select({ value: appSettingsTable.value })
@@ -38,14 +43,40 @@ router.get("/skus/:id/production-config", requireAuth, async (req, res): Promise
   const operatingDaysPerYear = daysSetting?.value ? parseInt(daysSetting.value, 10) : 250;
   const daysPerMonth = parseFloat((operatingDaysPerYear / 12).toFixed(1));
 
+  const formattedMembers = allProductionMembers.map(m => {
+    const wage = parseFloat(m.hourlyWage);
+    const salary = m.monthlySalary ? parseFloat(m.monthlySalary) : null;
+    const oncost = parseFloat(m.oncostPercent);
+    const payType = m.payType ?? "hourly";
+    let loadedRate: number;
+    if (payType === "monthly" && salary !== null) {
+      const dpm = config?.productionDaysPerMonth ?? 20;
+      loadedRate = (salary * (1 + oncost / 100)) / dpm / 8;
+    } else {
+      loadedRate = wage * (1 + oncost / 100);
+    }
+    return {
+      id: m.id,
+      name: m.name,
+      roleDescription: m.roleDescription,
+      payType,
+      hourlyWage: wage,
+      monthlySalary: salary,
+      oncostPercent: oncost,
+      loadedRate: parseFloat(loadedRate.toFixed(2)),
+      excluded: excludedMemberIds.includes(m.id),
+    };
+  });
+
   if (!config) {
-    res.json({ skuId, teamMemberIds, config: null, operatingDaysPerYear, daysPerMonth });
+    res.json({ skuId, excludedMemberIds, allProductionMembers: formattedMembers, config: null, operatingDaysPerYear, daysPerMonth });
     return;
   }
 
   res.json({
     skuId,
-    teamMemberIds,
+    excludedMemberIds,
+    allProductionMembers: formattedMembers,
     operatingDaysPerYear,
     daysPerMonth,
     config: {
@@ -65,20 +96,20 @@ router.post("/skus/:id/production-config", requireAuth, async (req, res): Promis
   if (isNaN(skuId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const auth = getAuth(req);
-  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, teamMemberIds, notes, changeReason, changeNote } = req.body;
+  const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes, changeReason, changeNote } = req.body;
 
   const uPD = unitsPerDay != null ? parseInt(unitsPerDay, 10) : null;
   const cS = cartonSize != null ? parseInt(cartonSize, 10) : 1;
   const sH = shiftHours != null ? parseFloat(shiftHours) : 8;
   const dPM = productionDaysPerMonth != null ? parseInt(productionDaysPerMonth, 10) : 20;
-  const memberIds: number[] = Array.isArray(teamMemberIds) ? teamMemberIds.map(Number).filter(n => !isNaN(n)) : [];
+  const excludedIds: number[] = Array.isArray(excludedMemberIds) ? excludedMemberIds.map(Number).filter(n => !isNaN(n)) : [];
 
   const reason = changeReason || "initial";
   const note = changeNote || null;
 
   const { laborCostPerUnit, overheadCostPerUnit } = await saveProductionConfig(
     skuId,
-    { unitsPerDay: uPD, cartonSize: cS, shiftHours: sH, productionDaysPerMonth: dPM, teamMemberIds: memberIds, notes },
+    { unitsPerDay: uPD, cartonSize: cS, shiftHours: sH, productionDaysPerMonth: dPM, excludedMemberIds: excludedIds, notes },
     reason,
     note,
     auth.userId
@@ -90,16 +121,42 @@ router.post("/skus/:id/production-config", requireAuth, async (req, res): Promis
     .where(eq(skuProductionConfigTable.skuId, skuId))
     .limit(1);
 
+  const allProductionMembers = await db
+    .select()
+    .from(teamMembersTable)
+    .where(and(eq(teamMembersTable.isActive, true), eq(teamMembersTable.department, "production")))
+    .orderBy(teamMembersTable.createdAt);
+
+  const formattedMembers = allProductionMembers.map(m => {
+    const wage = parseFloat(m.hourlyWage);
+    const salary = m.monthlySalary ? parseFloat(m.monthlySalary) : null;
+    const oncost = parseFloat(m.oncostPercent);
+    const payType = m.payType ?? "hourly";
+    let loadedRate: number;
+    if (payType === "monthly" && salary !== null) {
+      const dpm = config?.productionDaysPerMonth ?? 20;
+      loadedRate = (salary * (1 + oncost / 100)) / dpm / 8;
+    } else {
+      loadedRate = wage * (1 + oncost / 100);
+    }
+    return {
+      id: m.id,
+      name: m.name,
+      roleDescription: m.roleDescription,
+      payType,
+      hourlyWage: wage,
+      monthlySalary: salary,
+      oncostPercent: oncost,
+      loadedRate: parseFloat(loadedRate.toFixed(2)),
+      excluded: excludedIds.includes(m.id),
+    };
+  });
+
   let explanation: string | null = null;
-  if (laborCostPerUnit !== null && memberIds.length > 0) {
-    const members = await db
-      .select({ name: teamMembersTable.name, hourlyWage: teamMembersTable.hourlyWage, oncostPercent: teamMembersTable.oncostPercent })
-      .from(teamMembersTable)
-      .where(inArray(teamMembersTable.id, memberIds));
-    const names = members.map(m => m.name).join(", ");
-    const totalRate = members.reduce((s, m) => s + parseFloat(m.hourlyWage) * (1 + parseFloat(m.oncostPercent) / 100), 0);
-    const totalUnits = (uPD ?? 0) * cS;
-    explanation = `${names} × €${totalRate.toFixed(2)}/hr × ${sH} hrs ÷ ${totalUnits} units = €${laborCostPerUnit.toFixed(4)}/unit`;
+  const includedMembers = allProductionMembers.filter(m => !excludedIds.includes(m.id));
+  if (laborCostPerUnit !== null && includedMembers.length > 0) {
+    const names = includedMembers.map(m => m.name).join(", ");
+    explanation = `${names} · labor ฿${laborCostPerUnit.toFixed(4)}/unit`;
   }
 
   res.json({
@@ -112,7 +169,8 @@ router.post("/skus/:id/production-config", requireAuth, async (req, res): Promis
       laborCostPerUnit,
       overheadCostPerUnit,
     } : null,
-    teamMemberIds: memberIds,
+    excludedMemberIds: excludedIds,
+    allProductionMembers: formattedMembers,
     laborCostPerUnit,
     overheadCostPerUnit,
     explanation,
