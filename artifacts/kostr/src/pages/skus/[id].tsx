@@ -33,7 +33,6 @@ import { PhotoUpload } from "@/components/photo-upload";
 const CATEGORIES = [
   "Raw Materials",
   "Packaging",
-  "Labor",
   "Overhead",
   "Quality & Compliance",
   "Delivery",
@@ -42,7 +41,6 @@ const CATEGORIES = [
 const CATEGORY_COLORS: Record<string, string> = {
   "Raw Materials": "#22c55e",
   "Packaging": "#a855f7",
-  "Labor": "#f97316",
   "Overhead": "#94a3b8",
   "Quality & Compliance": "#3b82f6",
   "Delivery": "#f59e0b",
@@ -51,7 +49,6 @@ const CATEGORY_COLORS: Record<string, string> = {
 const CATEGORY_BORDER: Record<string, string> = {
   "Raw Materials": "border-l-green-500",
   "Packaging": "border-l-purple-500",
-  "Labor": "border-l-orange-500",
   "Overhead": "border-l-slate-400",
   "Quality & Compliance": "border-l-blue-500",
   "Delivery": "border-l-amber-500",
@@ -60,7 +57,6 @@ const CATEGORY_BORDER: Record<string, string> = {
 const CATEGORY_HEADER_BG: Record<string, string> = {
   "Raw Materials": "bg-green-50",
   "Packaging": "bg-purple-50",
-  "Labor": "bg-orange-50",
   "Overhead": "bg-slate-50",
   "Quality & Compliance": "bg-blue-50",
   "Delivery": "bg-amber-50",
@@ -69,7 +65,6 @@ const CATEGORY_HEADER_BG: Record<string, string> = {
 const CATEGORY_TEXT: Record<string, string> = {
   "Raw Materials": "text-green-700",
   "Packaging": "text-purple-700",
-  "Labor": "text-orange-700",
   "Overhead": "text-slate-600",
   "Quality & Compliance": "text-blue-700",
   "Delivery": "text-amber-700",
@@ -78,7 +73,6 @@ const CATEGORY_TEXT: Record<string, string> = {
 const CATEGORY_BG: Record<string, string> = {
   "Raw Materials": "bg-green-100 text-green-800",
   "Packaging": "bg-purple-100 text-purple-800",
-  "Labor": "bg-orange-100 text-orange-800",
   "Overhead": "bg-slate-100 text-slate-700",
   "Quality & Compliance": "bg-blue-100 text-blue-800",
   "Delivery": "bg-amber-100 text-amber-800",
@@ -665,6 +659,7 @@ export default function SkuDetail({ id }: { id: string }) {
     const totals: Record<string, number> = {};
     for (const line of sku.costLines) {
       const cat = (line as any).ingredientCategory || "Other";
+      if (cat === "Labor") continue;
       totals[cat] = (totals[cat] || 0) + (line.lineCost || 0);
     }
     const result = Object.entries(totals)
@@ -1291,16 +1286,16 @@ export default function SkuDetail({ id }: { id: string }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium flex items-center gap-1.5 mb-1.5">
-                    Units made per production day
+                    Cartons produced per day
                     <Tooltip>
                       <TooltipTrigger type="button"><Info className="w-3.5 h-3.5 text-muted-foreground" /></TooltipTrigger>
-                      <TooltipContent className="text-xs max-w-52">How many individual units your team makes in one shift for this product.</TooltipContent>
+                      <TooltipContent className="text-xs max-w-52">How many cartons your team produces in one shift for this product.</TooltipContent>
                     </Tooltip>
                   </label>
                   <Input
                     type="number"
                     min="1"
-                    placeholder="e.g. 200"
+                    placeholder="e.g. 50"
                     value={prodUnitsPerDay}
                     onChange={e => { setProdUnitsPerDay(e.target.value); setProdDirty(true); }}
                     className="h-9"
