@@ -51,6 +51,10 @@ router.post("/team-members", requireAuth, async (req, res): Promise<void> => {
 
   const dept = department || "production";
   const pType = payType || "hourly";
+
+  if (!["production", "management"].includes(dept)) { res.status(400).json({ error: "department must be 'production' or 'management'" }); return; }
+  if (!["hourly", "monthly"].includes(pType)) { res.status(400).json({ error: "payType must be 'hourly' or 'monthly'" }); return; }
+
   const oncost = oncostPercent != null ? parseFloat(oncostPercent) : 25;
 
   let wageVal = "0";
@@ -104,6 +108,13 @@ router.patch("/team-members/:id", requireAuth, async (req, res): Promise<void> =
   if (!existing) { res.status(404).json({ error: "Not found" }); return; }
 
   const updateData: Record<string, any> = {};
+
+  if (department != null && !["production", "management"].includes(department)) {
+    res.status(400).json({ error: "department must be 'production' or 'management'" }); return;
+  }
+  if (payType != null && !["hourly", "monthly"].includes(payType)) {
+    res.status(400).json({ error: "payType must be 'hourly' or 'monthly'" }); return;
+  }
 
   if (name != null) updateData.name = name.trim();
   if (roleDescription !== undefined) updateData.roleDescription = roleDescription?.trim() || null;

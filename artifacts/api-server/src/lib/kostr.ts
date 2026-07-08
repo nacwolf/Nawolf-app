@@ -331,12 +331,10 @@ export async function recalculateAllSkusForTeamChange(triggeredBy: string): Prom
 
   for (const skuId of skuIds) {
     const laborCost = await calculateLaborCostPerUnit(skuId);
-    if (laborCost !== null) {
-      await db.update(skuProductionConfigTable).set({
-        laborCostPerUnit: laborCost.toFixed(6),
-        updatedAt: new Date(),
-      }).where(eq(skuProductionConfigTable.skuId, skuId));
-    }
+    await db.update(skuProductionConfigTable).set({
+      laborCostPerUnit: laborCost !== null ? laborCost.toFixed(6) : null,
+      updatedAt: new Date(),
+    }).where(eq(skuProductionConfigTable.skuId, skuId));
     await snapshotSku(skuId, triggeredBy);
   }
 
