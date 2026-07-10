@@ -575,6 +575,8 @@ export default function SkuDetail({ id }: { id: string }) {
   const isFirstSave = !prodConfig?.config;
   const hasLaborSetup = prodConfig?.config?.laborCostPerUnit !== null && prodConfig?.config?.laborCostPerUnit !== undefined;
   const hasOverheadSetup = prodConfig?.config?.overheadCostPerUnit !== null && prodConfig?.config?.overheadCostPerUnit !== undefined;
+  const hasUtilitiesSetup = (prodConfig?.config as any)?.utilitiesCostPerUnit != null;
+  const hasWaterSetup = (prodConfig?.config as any)?.waterCostPerUnit != null;
 
   async function handleSaveProdConfig() {
     setIsSavingProd(true);
@@ -1232,17 +1234,19 @@ export default function SkuDetail({ id }: { id: string }) {
             <div className="text-left">
               <div className="text-sm font-bold uppercase tracking-wider text-orange-700">Production Setup</div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                {hasLaborSetup || hasOverheadSetup
+                {hasLaborSetup || hasOverheadSetup || hasUtilitiesSetup || hasWaterSetup
                   ? [
                       hasLaborSetup ? `Labor ${formatCurrency(prodConfig?.config?.laborCostPerUnit ?? null)}/unit` : null,
                       hasOverheadSetup ? `Overhead ${formatCurrency(prodConfig?.config?.overheadCostPerUnit ?? null)}/unit` : null,
+                      hasUtilitiesSetup ? `Utilities ${formatCurrency((prodConfig?.config as any).utilitiesCostPerUnit)}/unit` : null,
+                      hasWaterSetup ? `Water ${formatCurrency((prodConfig?.config as any).waterCostPerUnit)}/unit` : null,
                     ].filter(Boolean).join(" · ")
                   : "Set up team and production days to calculate labor & overhead cost"}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {(hasLaborSetup || hasOverheadSetup) && (
+            {(hasLaborSetup || hasOverheadSetup || hasUtilitiesSetup || hasWaterSetup) && (
               <Badge className="bg-orange-100 text-orange-800 border-0 text-xs">
                 {formatCurrency((prodConfig?.config?.laborCostPerUnit ?? 0) + (prodConfig?.config?.overheadCostPerUnit ?? 0) + ((prodConfig?.config as any)?.utilitiesCostPerUnit ?? 0) + ((prodConfig?.config as any)?.waterCostPerUnit ?? 0))}/unit
               </Badge>
