@@ -9,6 +9,8 @@ import { db, ingredientAttachmentsTable, skusTable, ingredientsTable, skuProduct
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
+const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]);
+
 const orgOf = (req: Request) => getAuth(req).orgId as string;
 
 const objectPathOf = (req: Request) => {
@@ -100,7 +102,13 @@ router.get("/storage/objects/*path", async (req: Request, res: Response): Promis
     }
 
     const obj = await objectStorageService.open(objectPath);
-    res.setHeader("Content-Type", obj.contentType);
+    // The stored type is whatever the uploader claimed. Only show known-safe
+    // types inline; anything else (HTML, SVG, ...) downloads, so an uploaded
+    // file can never run script on this origin.
+    const inline = INLINE_TYPES.has(obj.contentType.toLowerCase());
+    res.setHeader("Content-Type", inline ? obj.contentType : "application/octet-stream");
+    res.setHeader("Content-Disposition", inline ? "inline" : "attachment");
+    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'");
     res.setHeader("Content-Length", String(obj.size));
     res.setHeader("Cache-Control", "private, max-age=3600");
     res.setHeader("X-Content-Type-Options", "nosniff");
