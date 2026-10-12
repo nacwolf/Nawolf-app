@@ -1,6 +1,5 @@
 import { db, ingredientsTable, ingredientPricesTable, skusTable, costLinesTable, skuSnapshotsTable, packagingItemsTable } from "@workspace/db";
 import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable, overheadItemsTable, appSettingsTable, productionConfigHistoryTable } from "@workspace/db";
-import { printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
 import { eq, desc, sql, inArray, and, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { computeMarginStatus, laborCostPerUnit, overheadCostPerUnit, meteredCostPerUnit, computeCogs, type ProductionInputs } from "./costing";
@@ -145,16 +144,6 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
   const utilitiesCost = prodConfig?.utilitiesCostPerUnit ? parseFloat(prodConfig.utilitiesCostPerUnit) : null;
   const waterCost = prodConfig?.waterCostPerUnit ? parseFloat(prodConfig.waterCostPerUnit) : null;
 
-  const activeBlockConfigs = await db
-    .select({
-      numBlocks: skuPrintingBlockConfigsTable.numBlocks,
-      moq: skuPrintingBlockConfigsTable.moq,
-      pricePerBlock: printingBlockSuppliersTable.pricePerBlock,
-    })
-    .from(skuPrintingBlockConfigsTable)
-    .innerJoin(printingBlockSuppliersTable, eq(skuPrintingBlockConfigsTable.supplierId, printingBlockSuppliersTable.id))
-    .where(and(eq(skuPrintingBlockConfigsTable.skuId, skuId), eq(skuPrintingBlockConfigsTable.status, "active")));
-
   const materialLines: { unitPrice: number | null; quantityPerUnit: number }[] = [];
   for (const line of costLines) {
     let unitPrice: number | null = null;
@@ -167,11 +156,9 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
     materialLines.push({ unitPrice, quantityPerUnit: parseFloat(line.quantityPerUnit) });
   }
 
-  const blockCosts = activeBlockConfigs.map(c => (c.numBlocks * parseFloat(c.pricePerBlock)) / c.moq);
-
   return computeCogs({
     materialLines,
-    perUnitCosts: [laborCost, overheadCost, utilitiesCost, waterCost, ...blockCosts],
+    perUnitCosts: [laborCost, overheadCost, utilitiesCost, waterCost],
     sellPrice: parseFloat(sku[0].sellPrice),
   });
 }

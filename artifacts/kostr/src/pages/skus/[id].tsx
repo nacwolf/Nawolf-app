@@ -1143,7 +1143,7 @@ export default function SkuDetail({ id }: { id: string }) {
                       </TableHeader>
                       <TableBody>
                         {lines.map((line: any, lineIdx: number) => {
-                          const isPrintingBlock = !!line.isPrintingBlock || (line.packagingItemId != null && pkgMap[line.packagingItemId]?.category === "printing_block");
+                          const isPrintingBlock = (line.packagingItemId != null && pkgMap[line.packagingItemId]?.category === "printing_block");
                           const supplier = !isPrintingBlock && line.packagingItemId != null
                             ? pkgMap[line.packagingItemId]?.supplier
                             : !isPrintingBlock && line.ingredientId != null
