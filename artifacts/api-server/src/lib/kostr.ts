@@ -3,18 +3,14 @@ import { teamMembersTable, skuProductionConfigTable, skuTeamMembersTable, overhe
 import { printingBlockSuppliersTable, skuPrintingBlockConfigsTable } from "@workspace/db";
 import { eq, desc, sql, inArray, and, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
+import { computeMarginStatus, laborCostPerUnit, overheadCostPerUnit, meteredCostPerUnit, computeCogs, type ProductionInputs } from "./costing";
 
 async function getAppSetting(key: string): Promise<string | null> {
   const [row] = await db.select({ value: appSettingsTable.value }).from(appSettingsTable).where(eq(appSettingsTable.key, key)).limit(1);
   return row?.value ?? null;
 }
 
-export function computeMarginStatus(grossMargin: number | null): "healthy" | "review" | "critical" | "unknown" {
-  if (grossMargin === null) return "unknown";
-  if (grossMargin > 0.25) return "healthy";
-  if (grossMargin >= 0.10) return "review";
-  return "critical";
-}
+export { computeMarginStatus } from "./costing";
 
 export async function getCurrentPrice(ingredientId: number): Promise<number | null> {
   const [row] = await db
@@ -26,14 +22,25 @@ export async function getCurrentPrice(ingredientId: number): Promise<number | nu
   return row ? parseFloat(row.price) : null;
 }
 
-export async function calculateLaborCostPerUnit(skuId: number): Promise<number | null> {
-  const [config] = await db
-    .select()
-    .from(skuProductionConfigTable)
-    .where(eq(skuProductionConfigTable.skuId, skuId))
-    .limit(1);
-
+async function loadProductionInputs(skuId: number) {
+  const [config] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
   if (!config || !config.unitsPerDay) return null;
+  return {
+    config,
+    inputs: {
+      unitsPerDay: config.unitsPerDay,
+      cartonSize: config.cartonSize ?? 1,
+      shiftHours: parseFloat(config.shiftHours ?? "8"),
+      productionDaysPerMonth: config.productionDaysPerMonth ?? 20,
+    } satisfies ProductionInputs,
+  };
+}
+
+const num = (v: string | null | undefined) => (v == null || v === "" ? null : parseFloat(v));
+
+export async function calculateLaborCostPerUnit(skuId: number): Promise<number | null> {
+  const loaded = await loadProductionInputs(skuId);
+  if (!loaded) return null;
 
   const excludedRows = await db
     .select({ teamMemberId: skuTeamMembersTable.teamMemberId })
@@ -41,7 +48,7 @@ export async function calculateLaborCostPerUnit(skuId: number): Promise<number |
     .where(eq(skuTeamMembersTable.skuId, skuId));
   const excludedIds = excludedRows.map(r => r.teamMemberId);
 
-  let membersQuery = db
+  const members = await db
     .select({
       hourlyWage: teamMembersTable.hourlyWage,
       monthlySalary: teamMembersTable.monthlySalary,
@@ -57,97 +64,41 @@ export async function calculateLaborCostPerUnit(skuId: number): Promise<number |
       )
     );
 
-  const members = await membersQuery;
-  if (members.length === 0) return null;
-
-  const shiftHours = parseFloat(config.shiftHours ?? "8");
-  const totalDayUnits = config.unitsPerDay * (config.cartonSize ?? 1);
-  const daysPerMonth = config.productionDaysPerMonth ?? 20;
-
-  let totalLaborPerUnit = 0;
-  for (const m of members) {
-    const oncost = parseFloat(m.oncostPercent) / 100;
-    if ((m.payType ?? "hourly") === "monthly" && m.monthlySalary) {
-      const dailyCost = parseFloat(m.monthlySalary) * (1 + oncost) / daysPerMonth;
-      totalLaborPerUnit += dailyCost / totalDayUnits;
-    } else {
-      const loadedRate = parseFloat(m.hourlyWage) * (1 + oncost);
-      totalLaborPerUnit += (loadedRate * shiftHours) / totalDayUnits;
-    }
-  }
-
-  return totalLaborPerUnit;
+  return laborCostPerUnit(loaded.inputs, members.map(m => ({
+    payType: m.payType,
+    hourlyWage: parseFloat(m.hourlyWage),
+    monthlySalary: num(m.monthlySalary),
+    oncostPercent: parseFloat(m.oncostPercent),
+  })));
 }
 
 export async function calculateOverheadPerUnit(skuId: number): Promise<number | null> {
-  const [config] = await db
-    .select()
-    .from(skuProductionConfigTable)
-    .where(eq(skuProductionConfigTable.skuId, skuId))
-    .limit(1);
-
-  if (!config || !config.unitsPerDay) return null;
-
-  const daysPerMonth = config.productionDaysPerMonth ?? 20;
-  const unitsPerMonth = config.unitsPerDay * (config.cartonSize ?? 1) * daysPerMonth;
-  if (unitsPerMonth === 0) return null;
-
-  const items = await db
-    .select()
-    .from(overheadItemsTable)
-    .where(eq(overheadItemsTable.isActive, true));
-
-  if (items.length === 0) return null;
-
-  const totalMonthly = items.reduce((sum, item) => {
-    const amount = parseFloat(item.monthlyAmount);
-    const freq = item.frequency ?? "monthly";
-    return sum + (freq === "annual" ? amount / 12 : amount);
-  }, 0);
-
-  if (totalMonthly === 0) return null;
-
-  return totalMonthly / unitsPerMonth;
+  const loaded = await loadProductionInputs(skuId);
+  if (!loaded) return null;
+  const items = await db.select().from(overheadItemsTable).where(eq(overheadItemsTable.isActive, true));
+  return overheadCostPerUnit(loaded.inputs, items.map(i => ({ monthlyAmount: parseFloat(i.monthlyAmount), frequency: i.frequency })));
 }
 
 export async function calculateUtilitiesCostPerUnit(skuId: number): Promise<number | null> {
-  const [config] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
-  if (!config || !config.unitsPerDay) return null;
-
-  if (config.kwhPerUnit != null) {
-    const rateStr = await getAppSetting("electricity_rate_per_kwh");
-    if (!rateStr) return null;
-    return parseFloat(config.kwhPerUnit) * parseFloat(rateStr);
-  }
-
-  const monthlyStr = await getAppSetting("utilities_monthly_cost");
-  if (!monthlyStr) return null;
-  const monthly = parseFloat(monthlyStr);
-  if (monthly === 0) return null;
-  const daysPerMonth = config.productionDaysPerMonth ?? 20;
-  const unitsPerMonth = config.unitsPerDay * (config.cartonSize ?? 1) * daysPerMonth;
-  if (unitsPerMonth === 0) return null;
-  return monthly / unitsPerMonth;
+  const loaded = await loadProductionInputs(skuId);
+  if (!loaded) return null;
+  return meteredCostPerUnit(
+    loaded.inputs,
+    num(loaded.config.kwhPerUnit),
+    num(await getAppSetting("electricity_rate_per_kwh")),
+    num(await getAppSetting("utilities_monthly_cost")),
+  );
 }
 
 export async function calculateWaterCostPerUnit(skuId: number): Promise<number | null> {
-  const [config] = await db.select().from(skuProductionConfigTable).where(eq(skuProductionConfigTable.skuId, skuId)).limit(1);
-  if (!config || !config.unitsPerDay) return null;
-
-  if (config.litersPerUnit != null) {
-    const rateStr = await getAppSetting("water_rate_per_liter");
-    if (!rateStr) return null;
-    return parseFloat(config.litersPerUnit) * parseFloat(rateStr);
-  }
-
-  const monthlyStr = await getAppSetting("water_monthly_cost");
-  if (!monthlyStr) return null;
-  const monthly = parseFloat(monthlyStr);
-  if (monthly === 0) return null;
-  const daysPerMonth = config.productionDaysPerMonth ?? 20;
-  const unitsPerMonth = config.unitsPerDay * (config.cartonSize ?? 1) * daysPerMonth;
-  if (unitsPerMonth === 0) return null;
-  return monthly / unitsPerMonth;
+  const loaded = await loadProductionInputs(skuId);
+  if (!loaded) return null;
+  return meteredCostPerUnit(
+    loaded.inputs,
+    num(loaded.config.litersPerUnit),
+    num(await getAppSetting("water_rate_per_liter")),
+    num(await getAppSetting("water_monthly_cost")),
+  );
 }
 
 export async function updateProductionConfigLabor(skuId: number): Promise<number | null> {
@@ -204,37 +155,25 @@ export async function recalculateSkuCogs(skuId: number): Promise<{ totalCogs: nu
     .innerJoin(printingBlockSuppliersTable, eq(skuPrintingBlockConfigsTable.supplierId, printingBlockSuppliersTable.id))
     .where(and(eq(skuPrintingBlockConfigsTable.skuId, skuId), eq(skuPrintingBlockConfigsTable.status, "active")));
 
-  if (costLines.length === 0 && laborCost === null && overheadCost === null && utilitiesCost === null && waterCost === null && activeBlockConfigs.length === 0) return { totalCogs: null, grossMargin: null };
-
-  let totalCogs = 0;
+  const materialLines: { unitPrice: number | null; quantityPerUnit: number }[] = [];
   for (const line of costLines) {
-    const qty = parseFloat(line.quantityPerUnit);
+    let unitPrice: number | null = null;
     if (line.packagingItemId != null) {
       const [pkg] = await db.select({ unitCost: packagingItemsTable.unitCost }).from(packagingItemsTable).where(eq(packagingItemsTable.id, line.packagingItemId)).limit(1);
-      if (!pkg) return { totalCogs: null, grossMargin: null };
-      totalCogs += parseFloat(pkg.unitCost) * qty;
+      unitPrice = pkg ? parseFloat(pkg.unitCost) : null;
     } else if (line.ingredientId != null) {
-      const price = await getCurrentPrice(line.ingredientId);
-      if (price === null) return { totalCogs: null, grossMargin: null };
-      totalCogs += price * qty;
-    }
+      unitPrice = await getCurrentPrice(line.ingredientId);
+    } else continue;
+    materialLines.push({ unitPrice, quantityPerUnit: parseFloat(line.quantityPerUnit) });
   }
 
-  if (laborCost !== null) totalCogs += laborCost;
-  if (overheadCost !== null) totalCogs += overheadCost;
-  if (utilitiesCost !== null) totalCogs += utilitiesCost;
-  if (waterCost !== null) totalCogs += waterCost;
+  const blockCosts = activeBlockConfigs.map(c => (c.numBlocks * parseFloat(c.pricePerBlock)) / c.moq);
 
-  for (const config of activeBlockConfigs) {
-    const amortized = (config.numBlocks * parseFloat(config.pricePerBlock)) / config.moq;
-    totalCogs += amortized;
-  }
-
-  const sellPrice = parseFloat(sku[0].sellPrice);
-  if (sellPrice === 0) return { totalCogs, grossMargin: null };
-
-  const grossMargin = (sellPrice - totalCogs) / sellPrice;
-  return { totalCogs, grossMargin };
+  return computeCogs({
+    materialLines,
+    perUnitCosts: [laborCost, overheadCost, utilitiesCost, waterCost, ...blockCosts],
+    sellPrice: parseFloat(sku[0].sellPrice),
+  });
 }
 
 export async function snapshotSku(skuId: number, triggeredBy: string): Promise<void> {
@@ -270,7 +209,7 @@ export async function saveProductionConfig(
   },
   changeReason: string,
   changeNote: string | null,
-  createdBy?: string
+  createdBy?: string | null
 ): Promise<{ laborCostPerUnit: number | null; overheadCostPerUnit: number | null; utilitiesCostPerUnit: number | null; waterCostPerUnit: number | null }> {
   const { unitsPerDay, cartonSize, shiftHours, productionDaysPerMonth, excludedMemberIds, notes, kwhPerUnit, litersPerUnit } = inputs;
 
