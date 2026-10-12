@@ -4,14 +4,17 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db, pool, withOrg, ingredientsTable } from "./index";
+import { db, pool, withOrg, ingredientsTable, ingredientPricesTable } from "./index";
 
 const orgA = `test-a-${randomUUID()}`;
 const orgB = `test-b-${randomUUID()}`;
 
 after(async () => {
   for (const org of [orgA, orgB]) {
-    await withOrg(org, () => db.delete(ingredientsTable));
+    await withOrg(org, async () => {
+      await db.delete(ingredientPricesTable);
+      await db.delete(ingredientsTable);
+    });
   }
   await pool.end();
 });
@@ -49,6 +52,14 @@ test("cannot write a row tagged with another org", async () => {
   );
 });
 
+test("cannot reference another org's row (composite foreign keys)", async () => {
+  const [a] = await withOrg(orgA, () => db.select().from(ingredientsTable));
+  await assert.rejects(
+    withOrg(orgB, () => db.insert(ingredientPricesTable).values({ ingredientId: a.id, price: "1", effectiveDate: "2026-01-01" })),
+    (err: any) => /foreign key/.test(String(err?.cause ?? err)),
+  );
+});
+
 test("outside a request: reads see nothing, inserts fail", async () => {
   assert.equal((await db.select().from(ingredientsTable)).length, 0);
   await assert.rejects(
@@ -61,4 +72,14 @@ test("org setting does not leak to the next request on a reused connection", asy
   await withOrg(orgA, async () => {});
   const { rows } = await pool.query("select current_setting('app.org_id', true) as org");
   assert.ok(!rows[0].org, `leaked org: ${rows[0].org}`);
+});
+
+test("slow requests that never query hold no connection (uploads cannot exhaust the pool)", async () => {
+  const busy = () => pool.totalCount - pool.idleCount;
+  const before = busy();
+  let during = -1;
+  await Promise.all(Array.from({ length: 25 }, () =>
+    withOrg(orgA, () => new Promise<void>((resolve) => setTimeout(() => { during = busy(); resolve(); }, 30))),
+  ));
+  assert.equal(during, before);
 });

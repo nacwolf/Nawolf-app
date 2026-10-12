@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, numeric, integer, date, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, integer, date, index, foreignKey, unique } from "drizzle-orm/pg-core";
 import { orgIdColumn, orgIsolation } from "./tenancy";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -23,19 +23,21 @@ export const ingredientsTable = pgTable("ingredients", {
   photoContentType: text("photo_content_type"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  unique("ingredients_org_id_id_unique").on(t.orgId, t.id),
   ...orgIsolation("ingredients", t.orgId),
 ]);
 
 export const ingredientPricesTable = pgTable("ingredient_prices", {
   orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
-  ingredientId: integer("ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  ingredientId: integer("ingredient_id").notNull(),
   price: numeric("price", { precision: 12, scale: 4 }).notNull(),
   effectiveDate: date("effective_date").notNull(),
   reason: text("reason"),
   loggedBy: text("logged_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  foreignKey({ name: "ingredient_prices_ingredient_id_fk", columns: [t.orgId, t.ingredientId], foreignColumns: [ingredientsTable.orgId, ingredientsTable.id] }).onDelete("cascade"),
   ...orgIsolation("ingredient_prices", t.orgId),
   index("ingredient_prices_ingredient_date_idx").on(t.ingredientId, t.effectiveDate),
 ]);
@@ -43,13 +45,14 @@ export const ingredientPricesTable = pgTable("ingredient_prices", {
 export const ingredientAttachmentsTable = pgTable("ingredient_attachments", {
   orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
-  ingredientId: integer("ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  ingredientId: integer("ingredient_id").notNull(),
   fileName: text("file_name").notNull(),
   objectPath: text("object_path").notNull(),
   fileType: text("file_type"),
   uploadedBy: text("uploaded_by"),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  foreignKey({ name: "ingredient_attachments_ingredient_id_fk", columns: [t.orgId, t.ingredientId], foreignColumns: [ingredientsTable.orgId, ingredientsTable.id] }).onDelete("cascade"),
   ...orgIsolation("ingredient_attachments", t.orgId),
   index("ingredient_attachments_ingredient_idx").on(t.ingredientId),
 ]);
@@ -57,7 +60,7 @@ export const ingredientAttachmentsTable = pgTable("ingredient_attachments", {
 export const ingredientTierPriceHistoryTable = pgTable("ingredient_tier_price_history", {
   orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
-  ingredientId: integer("ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  ingredientId: integer("ingredient_id").notNull(),
   tier: text("tier").notNull(),
   oldPrice: numeric("old_price", { precision: 12, scale: 4 }),
   newPrice: numeric("new_price", { precision: 12, scale: 4 }),
@@ -66,6 +69,7 @@ export const ingredientTierPriceHistoryTable = pgTable("ingredient_tier_price_hi
   changedBy: text("changed_by"),
   changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  foreignKey({ name: "ingredient_tier_price_history_ingredient_id_fk", columns: [t.orgId, t.ingredientId], foreignColumns: [ingredientsTable.orgId, ingredientsTable.id] }).onDelete("cascade"),
   ...orgIsolation("ingredient_tier_price_history", t.orgId),
   index("ingredient_tier_history_ingredient_idx").on(t.ingredientId),
 ]);
@@ -89,13 +93,15 @@ export type IngredientTierPriceHistory = typeof ingredientTierPriceHistoryTable.
 export const ingredientComponentsTable = pgTable("ingredient_components", {
   orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
-  parentIngredientId: integer("parent_ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
-  childIngredientId: integer("child_ingredient_id").notNull().references(() => ingredientsTable.id, { onDelete: "cascade" }),
+  parentIngredientId: integer("parent_ingredient_id").notNull(),
+  childIngredientId: integer("child_ingredient_id").notNull(),
   quantity: numeric("quantity", { precision: 12, scale: 4 }).notNull(),
   unit: text("unit").notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  foreignKey({ name: "ingredient_components_parent_ingredient_id_fk", columns: [t.orgId, t.parentIngredientId], foreignColumns: [ingredientsTable.orgId, ingredientsTable.id] }).onDelete("cascade"),
+  foreignKey({ name: "ingredient_components_child_ingredient_id_fk", columns: [t.orgId, t.childIngredientId], foreignColumns: [ingredientsTable.orgId, ingredientsTable.id] }).onDelete("cascade"),
   ...orgIsolation("ingredient_components", t.orgId),
   index("ingredient_components_parent_idx").on(t.parentIngredientId),
 ]);

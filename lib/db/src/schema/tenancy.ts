@@ -6,9 +6,8 @@ import { text, pgPolicy, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 // hides other companies' rows from every query, even one that forgets a WHERE.
 // A pooled connection that once had the setting reports '' after RESET, so
 // treat '' as unset: the default becomes NULL (insert fails) and nothing matches.
-// shortcut: FK checks ignore RLS, so a row may reference another org's id (no data
-// is readable through it, but it blocks that org's delete). Upgrade to composite
-// FKs on (org_id, id) before opening sign-ups to untrusted companies.
+// FK checks ignore RLS, so every foreign key is composite (org_id, id): a row
+// can only reference a row of the same company.
 const currentOrg = sql`nullif(current_setting('app.org_id', true), '')`;
 
 export const orgIdColumn = () => text("org_id").notNull().default(currentOrg);

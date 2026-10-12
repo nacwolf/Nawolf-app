@@ -68,7 +68,8 @@ CREATE TABLE "ingredients" (
 	"created_by" text,
 	"photo_url" text,
 	"photo_content_type" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ingredients_org_id_id_unique" UNIQUE("org_id","id")
 );
 --> statement-breakpoint
 ALTER TABLE "ingredients" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -177,6 +178,7 @@ CREATE TABLE "skus" (
 	"dieline_content_type" text,
 	"dieline_name" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "skus_org_id_id_unique" UNIQUE("org_id","id"),
 	CONSTRAINT "skus_org_sku_code_unique" UNIQUE("org_id","sku_code")
 );
 --> statement-breakpoint
@@ -260,7 +262,8 @@ CREATE TABLE "team_members" (
 	"monthly_salary" numeric(10, 2),
 	"oncost_percent" numeric(5, 2) DEFAULT '25' NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "team_members_org_id_id_unique" UNIQUE("org_id","id")
 );
 --> statement-breakpoint
 ALTER TABLE "team_members" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -286,25 +289,26 @@ CREATE TABLE "packaging_items" (
 	"spec_doc_content_type" text,
 	"spec_doc_file_name" text,
 	"specs" jsonb,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "packaging_items_org_id_id_unique" UNIQUE("org_id","id")
 );
 --> statement-breakpoint
 ALTER TABLE "packaging_items" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "ingredient_attachments" ADD CONSTRAINT "ingredient_attachments_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ingredient_components" ADD CONSTRAINT "ingredient_components_parent_ingredient_id_ingredients_id_fk" FOREIGN KEY ("parent_ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ingredient_components" ADD CONSTRAINT "ingredient_components_child_ingredient_id_ingredients_id_fk" FOREIGN KEY ("child_ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ingredient_prices" ADD CONSTRAINT "ingredient_prices_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ingredient_tier_price_history" ADD CONSTRAINT "ingredient_tier_price_history_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "cost_lines" ADD CONSTRAINT "cost_lines_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "cost_lines" ADD CONSTRAINT "cost_lines_ingredient_id_ingredients_id_fk" FOREIGN KEY ("ingredient_id") REFERENCES "public"."ingredients"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "cost_lines" ADD CONSTRAINT "cost_lines_packaging_item_id_packaging_items_id_fk" FOREIGN KEY ("packaging_item_id") REFERENCES "public"."packaging_items"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sku_certificate_files" ADD CONSTRAINT "sku_certificate_files_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sku_product_photos" ADD CONSTRAINT "sku_product_photos_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sku_snapshots" ADD CONSTRAINT "sku_snapshots_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "production_config_history" ADD CONSTRAINT "production_config_history_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sku_production_config" ADD CONSTRAINT "sku_production_config_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sku_team_members" ADD CONSTRAINT "sku_team_members_sku_id_skus_id_fk" FOREIGN KEY ("sku_id") REFERENCES "public"."skus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sku_team_members" ADD CONSTRAINT "sku_team_members_team_member_id_team_members_id_fk" FOREIGN KEY ("team_member_id") REFERENCES "public"."team_members"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ingredient_attachments" ADD CONSTRAINT "ingredient_attachments_ingredient_id_fk" FOREIGN KEY ("org_id","ingredient_id") REFERENCES "public"."ingredients"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ingredient_components" ADD CONSTRAINT "ingredient_components_parent_ingredient_id_fk" FOREIGN KEY ("org_id","parent_ingredient_id") REFERENCES "public"."ingredients"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ingredient_components" ADD CONSTRAINT "ingredient_components_child_ingredient_id_fk" FOREIGN KEY ("org_id","child_ingredient_id") REFERENCES "public"."ingredients"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ingredient_prices" ADD CONSTRAINT "ingredient_prices_ingredient_id_fk" FOREIGN KEY ("org_id","ingredient_id") REFERENCES "public"."ingredients"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ingredient_tier_price_history" ADD CONSTRAINT "ingredient_tier_price_history_ingredient_id_fk" FOREIGN KEY ("org_id","ingredient_id") REFERENCES "public"."ingredients"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cost_lines" ADD CONSTRAINT "cost_lines_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cost_lines" ADD CONSTRAINT "cost_lines_ingredient_id_fk" FOREIGN KEY ("org_id","ingredient_id") REFERENCES "public"."ingredients"("org_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "cost_lines" ADD CONSTRAINT "cost_lines_packaging_item_id_fk" FOREIGN KEY ("org_id","packaging_item_id") REFERENCES "public"."packaging_items"("org_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sku_certificate_files" ADD CONSTRAINT "sku_certificate_files_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sku_product_photos" ADD CONSTRAINT "sku_product_photos_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sku_snapshots" ADD CONSTRAINT "sku_snapshots_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "production_config_history" ADD CONSTRAINT "production_config_history_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sku_production_config" ADD CONSTRAINT "sku_production_config_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sku_team_members" ADD CONSTRAINT "sku_team_members_sku_id_fk" FOREIGN KEY ("org_id","sku_id") REFERENCES "public"."skus"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sku_team_members" ADD CONSTRAINT "sku_team_members_team_member_id_fk" FOREIGN KEY ("org_id","team_member_id") REFERENCES "public"."team_members"("org_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "ingredient_attachments_org_id_idx" ON "ingredient_attachments" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "ingredient_attachments_ingredient_idx" ON "ingredient_attachments" USING btree ("ingredient_id");--> statement-breakpoint
 CREATE INDEX "ingredient_components_org_id_idx" ON "ingredient_components" USING btree ("org_id");--> statement-breakpoint

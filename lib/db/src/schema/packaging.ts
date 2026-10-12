@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, numeric, integer, pgEnum, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, integer, pgEnum, jsonb, unique } from "drizzle-orm/pg-core";
 import { orgIdColumn, orgIsolation } from "./tenancy";
 
 export const packagingCategoryEnum = pgEnum("packaging_category", [
@@ -40,6 +40,7 @@ export const packagingItemsTable = pgTable("packaging_items", {
   specs: jsonb("specs"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
+  unique("packaging_items_org_id_id_unique").on(t.orgId, t.id),
   ...orgIsolation("packaging_items", t.orgId),
 ]);
 

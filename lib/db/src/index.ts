@@ -11,11 +11,15 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// shortcut: one pooled connection per in-flight request, pool max 10.
-// Raise DB_POOL_MAX or put PgBouncer (session mode) in front when traffic grows.
+// Requests borrow a connection only once they query, and give it back when the
+// response ends. Slow clients (uploads) never hold one; a full pool fails fast.
+// shortcut: pool max 10; raise DB_POOL_MAX or add PgBouncer (session mode) when traffic grows.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: Number(process.env.DB_POOL_MAX ?? 10),
+  connectionTimeoutMillis: 5_000,
+  statement_timeout: 30_000,
+  idle_in_transaction_session_timeout: 30_000,
 });
 
 const baseDb = drizzle(pool, { schema });
@@ -36,28 +40,42 @@ export const db = new Proxy(baseDb, {
 }) as Db;
 
 export async function withOrg<T>(orgId: string, fn: () => Promise<T>): Promise<T> {
-  const client = await pool.connect();
+  let connecting: Promise<pg.PoolClient> | undefined;
   let released = false;
-  // A query after release would run on a connection another request may own.
-  const guarded = new Proxy(client, {
-    get(target, prop) {
-      if (prop === "query" && released) {
-        throw new Error("DB query after the request ended");
+  const connect = () =>
+    (connecting ??= pool.connect().then(async (client) => {
+      try {
+        await client.query("select set_config('app.org_id', $1, false)", [orgId]);
+        return client;
+      } catch (err) {
+        client.release(err as Error);
+        throw err;
       }
-      const value = Reflect.get(target, prop, target);
-      return typeof value === "function" ? value.bind(target) : value;
+    }));
+  // Drizzle only calls query(). After release the connection may belong to
+  // another request, so late queries are refused rather than run there.
+  const lazyClient = {
+    async query(...args: unknown[]) {
+      if (released) throw new Error("DB query after the request ended");
+      const client = await connect();
+      return (client.query as (...a: unknown[]) => Promise<unknown>)(...args);
     },
-  });
+  } as unknown as pg.PoolClient;
+
   try {
-    await client.query("select set_config('app.org_id', $1, false)", [orgId]);
-    return await requestDb.run(drizzle(guarded, { schema }), fn);
+    return await requestDb.run(drizzle(lazyClient, { schema }), fn);
   } finally {
     released = true;
-    try {
-      await client.query("reset app.org_id");
-      client.release();
-    } catch (err) {
-      client.release(err as Error); // destroy rather than reuse a connection in unknown state
+    if (connecting) {
+      const client = await connecting.catch(() => undefined);
+      if (client) {
+        try {
+          await client.query("reset app.org_id");
+          client.release();
+        } catch (err) {
+          client.release(err as Error); // destroy rather than reuse a connection in unknown state
+        }
+      }
     }
   }
 }

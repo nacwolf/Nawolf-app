@@ -1,6 +1,6 @@
 {
-  "id": "7a30fa83-3cd1-4de5-b712-1c30e79507b9",
-  "prevId": "147f9d5b-fdcf-4ef2-b04e-dc117305c952",
+  "id": "5bc9d8d3-c026-49b5-84aa-20eb04057b72",
+  "prevId": "4d8b23b4-05e2-41b6-a2bf-679aa7b8b977",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -92,14 +92,16 @@
         }
       },
       "foreignKeys": {
-        "ingredient_attachments_ingredient_id_ingredients_id_fk": {
-          "name": "ingredient_attachments_ingredient_id_ingredients_id_fk",
+        "ingredient_attachments_ingredient_id_fk": {
+          "name": "ingredient_attachments_ingredient_id_fk",
           "tableFrom": "ingredient_attachments",
           "columnsFrom": [
+            "org_id",
             "ingredient_id"
           ],
           "tableTo": "ingredients",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -211,27 +213,31 @@
         }
       },
       "foreignKeys": {
-        "ingredient_components_parent_ingredient_id_ingredients_id_fk": {
-          "name": "ingredient_components_parent_ingredient_id_ingredients_id_fk",
+        "ingredient_components_parent_ingredient_id_fk": {
+          "name": "ingredient_components_parent_ingredient_id_fk",
           "tableFrom": "ingredient_components",
           "columnsFrom": [
+            "org_id",
             "parent_ingredient_id"
           ],
           "tableTo": "ingredients",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "ingredient_components_child_ingredient_id_ingredients_id_fk": {
-          "name": "ingredient_components_child_ingredient_id_ingredients_id_fk",
+        "ingredient_components_child_ingredient_id_fk": {
+          "name": "ingredient_components_child_ingredient_id_fk",
           "tableFrom": "ingredient_components",
           "columnsFrom": [
+            "org_id",
             "child_ingredient_id"
           ],
           "tableTo": "ingredients",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -349,14 +355,16 @@
         }
       },
       "foreignKeys": {
-        "ingredient_prices_ingredient_id_ingredients_id_fk": {
-          "name": "ingredient_prices_ingredient_id_ingredients_id_fk",
+        "ingredient_prices_ingredient_id_fk": {
+          "name": "ingredient_prices_ingredient_id_fk",
           "tableFrom": "ingredient_prices",
           "columnsFrom": [
+            "org_id",
             "ingredient_id"
           ],
           "tableTo": "ingredients",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -480,14 +488,16 @@
         }
       },
       "foreignKeys": {
-        "ingredient_tier_price_history_ingredient_id_ingredients_id_fk": {
-          "name": "ingredient_tier_price_history_ingredient_id_ingredients_id_fk",
+        "ingredient_tier_price_history_ingredient_id_fk": {
+          "name": "ingredient_tier_price_history_ingredient_id_fk",
           "tableFrom": "ingredient_tier_price_history",
           "columnsFrom": [
+            "org_id",
             "ingredient_id"
           ],
           "tableTo": "ingredients",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -645,7 +655,16 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "ingredients_org_id_id_unique": {
+          "name": "ingredients_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {
         "ingredients_org_isolation": {
           "name": "ingredients_org_isolation",
@@ -772,40 +791,46 @@
         }
       },
       "foreignKeys": {
-        "cost_lines_sku_id_skus_id_fk": {
-          "name": "cost_lines_sku_id_skus_id_fk",
+        "cost_lines_sku_id_fk": {
+          "name": "cost_lines_sku_id_fk",
           "tableFrom": "cost_lines",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "cost_lines_ingredient_id_ingredients_id_fk": {
-          "name": "cost_lines_ingredient_id_ingredients_id_fk",
+        "cost_lines_ingredient_id_fk": {
+          "name": "cost_lines_ingredient_id_fk",
           "tableFrom": "cost_lines",
           "columnsFrom": [
+            "org_id",
             "ingredient_id"
           ],
           "tableTo": "ingredients",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
-        "cost_lines_packaging_item_id_packaging_items_id_fk": {
-          "name": "cost_lines_packaging_item_id_packaging_items_id_fk",
+        "cost_lines_packaging_item_id_fk": {
+          "name": "cost_lines_packaging_item_id_fk",
           "tableFrom": "cost_lines",
           "columnsFrom": [
+            "org_id",
             "packaging_item_id"
           ],
           "tableTo": "packaging_items",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -917,14 +942,16 @@
         }
       },
       "foreignKeys": {
-        "sku_certificate_files_sku_id_skus_id_fk": {
-          "name": "sku_certificate_files_sku_id_skus_id_fk",
+        "sku_certificate_files_sku_id_fk": {
+          "name": "sku_certificate_files_sku_id_fk",
           "tableFrom": "sku_certificate_files",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -1043,14 +1070,16 @@
         }
       },
       "foreignKeys": {
-        "sku_product_photos_sku_id_skus_id_fk": {
-          "name": "sku_product_photos_sku_id_skus_id_fk",
+        "sku_product_photos_sku_id_fk": {
+          "name": "sku_product_photos_sku_id_fk",
           "tableFrom": "sku_product_photos",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -1174,14 +1203,16 @@
         }
       },
       "foreignKeys": {
-        "sku_snapshots_sku_id_skus_id_fk": {
-          "name": "sku_snapshots_sku_id_skus_id_fk",
+        "sku_snapshots_sku_id_fk": {
+          "name": "sku_snapshots_sku_id_fk",
           "tableFrom": "sku_snapshots",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -1566,6 +1597,14 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
+        "skus_org_id_id_unique": {
+          "name": "skus_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        },
         "skus_org_sku_code_unique": {
           "name": "skus_org_sku_code_unique",
           "columns": [
@@ -1890,14 +1929,16 @@
         }
       },
       "foreignKeys": {
-        "production_config_history_sku_id_skus_id_fk": {
-          "name": "production_config_history_sku_id_skus_id_fk",
+        "production_config_history_sku_id_fk": {
+          "name": "production_config_history_sku_id_fk",
           "tableFrom": "production_config_history",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -2039,14 +2080,16 @@
         }
       },
       "foreignKeys": {
-        "sku_production_config_sku_id_skus_id_fk": {
-          "name": "sku_production_config_sku_id_skus_id_fk",
+        "sku_production_config_sku_id_fk": {
+          "name": "sku_production_config_sku_id_fk",
           "tableFrom": "sku_production_config",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -2135,27 +2178,31 @@
         }
       },
       "foreignKeys": {
-        "sku_team_members_sku_id_skus_id_fk": {
-          "name": "sku_team_members_sku_id_skus_id_fk",
+        "sku_team_members_sku_id_fk": {
+          "name": "sku_team_members_sku_id_fk",
           "tableFrom": "sku_team_members",
           "columnsFrom": [
+            "org_id",
             "sku_id"
           ],
           "tableTo": "skus",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
-        "sku_team_members_team_member_id_team_members_id_fk": {
-          "name": "sku_team_members_team_member_id_team_members_id_fk",
+        "sku_team_members_team_member_id_fk": {
+          "name": "sku_team_members_team_member_id_fk",
           "tableFrom": "sku_team_members",
           "columnsFrom": [
+            "org_id",
             "team_member_id"
           ],
           "tableTo": "team_members",
           "columnsTo": [
+            "org_id",
             "id"
           ],
           "onUpdate": "no action",
@@ -2284,7 +2331,16 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "team_members_org_id_id_unique": {
+          "name": "team_members_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {
         "team_members_org_isolation": {
           "name": "team_members_org_isolation",
@@ -2462,7 +2518,16 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "packaging_items_org_id_id_unique": {
+          "name": "packaging_items_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {
         "packaging_items_org_isolation": {
           "name": "packaging_items_org_isolation",
