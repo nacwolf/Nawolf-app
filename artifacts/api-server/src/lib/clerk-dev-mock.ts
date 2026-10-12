@@ -8,11 +8,11 @@ if (process.env.NODE_ENV === "production") {
 
 export function clerkMiddleware(): RequestHandler {
   return (req, _res, next) => {
-    (req as any).auth = () => ({ userId: "dev-user" });
+    (req as any).auth = () => ({ userId: "dev-user", orgId: process.env.DEV_ORG_ID ?? "dev-org" });
     next();
   };
 }
 
 export function getAuth(req: any) {
-  return typeof req.auth === "function" ? req.auth() : { userId: "dev-user" };
+  return typeof req.auth === "function" ? req.auth() : { userId: "dev-user", orgId: process.env.DEV_ORG_ID ?? "dev-org" };
 }

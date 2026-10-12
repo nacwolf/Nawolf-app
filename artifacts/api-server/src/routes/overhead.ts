@@ -119,7 +119,7 @@ router.patch("/overhead/settings", requireAuth, async (req, res): Promise<void> 
   await db
     .insert(appSettingsTable)
     .values({ key: "operating_days_per_year", value: String(days), updatedAt: new Date() })
-    .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: String(days), updatedAt: new Date() } });
+    .onConflictDoUpdate({ target: [appSettingsTable.orgId, appSettingsTable.key], set: { value: String(days), updatedAt: new Date() } });
 
   const affectedSkuCount = await recalculateOverheadForAllSkus("operating_days_updated");
   const daysPerMonth = parseFloat((days / 12).toFixed(1));
@@ -137,7 +137,7 @@ router.patch("/overhead/utilities", requireAuth, async (req, res): Promise<void>
 
   for (const { key, val } of pairs) {
     await db.insert(appSettingsTable).values({ key, value: String(val), updatedAt: new Date() })
-      .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: String(val), updatedAt: new Date() } });
+      .onConflictDoUpdate({ target: [appSettingsTable.orgId, appSettingsTable.key], set: { value: String(val), updatedAt: new Date() } });
   }
 
   const affectedSkuCount = await recalculateOverheadForAllSkus("utilities_settings_updated");

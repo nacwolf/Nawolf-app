@@ -24,7 +24,10 @@ Kostr is a cost and margin tracking web app for food manufacturer/repacking SMEs
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/db run generate` — create a migration after editing `lib/db/src/schema/`
+- `pnpm --filter @workspace/db run migrate` — apply pending migrations
+- `pnpm --filter @workspace/db run seed` — sample data for one company (SEED_ORG_ID, default dev-org)
+- `./scripts/dev-local.sh` — run everything locally (Postgres, migrations, API on 8081, web on 3003)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 - `pnpm --filter @workspace/kostr run dev` — run frontend locally
 

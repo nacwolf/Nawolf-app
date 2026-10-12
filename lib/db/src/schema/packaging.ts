@@ -1,4 +1,5 @@
 import { pgTable, serial, text, timestamp, numeric, integer, pgEnum, jsonb } from "drizzle-orm/pg-core";
+import { orgIdColumn, orgIsolation } from "./tenancy";
 
 export const packagingCategoryEnum = pgEnum("packaging_category", [
   "sachet_primary_bag",
@@ -16,6 +17,7 @@ export const packagingCategoryEnum = pgEnum("packaging_category", [
 export const packagingUnitEnum = pgEnum("packaging_unit", ["piece", "roll", "kg", "meter"]);
 
 export const packagingItemsTable = pgTable("packaging_items", {
+  orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
   nameEnglish: text("name_english").notNull(),
   nameThai: text("name_thai"),
@@ -37,7 +39,9 @@ export const packagingItemsTable = pgTable("packaging_items", {
   specDocFileName: text("spec_doc_file_name"),
   specs: jsonb("specs"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  ...orgIsolation("packaging_items", t.orgId),
+]);
 
 export type PackagingItem = typeof packagingItemsTable.$inferSelect;
 export type InsertPackagingItem = typeof packagingItemsTable.$inferInsert;

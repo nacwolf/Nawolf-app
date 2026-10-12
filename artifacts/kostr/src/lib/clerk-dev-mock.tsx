@@ -1,6 +1,6 @@
-// ponytail: stand-in for @clerk/react when VITE_CLERK_PUBLISHABLE_KEY is unset
-// (local dev without Replit secrets). Aliased in vite.config.ts, guarded so it
-// never applies where the real key is set. Upgrade path: set a real Clerk key.
+// ponytail: stand-in for @clerk/react in local dev, aliased in vite.config.ts
+// only for the sentinel key pk_test_dev_mock_do_not_use. Signed in as dev-user
+// in company dev-org (matches the API mock). Upgrade path: set a real Clerk key.
 import type { ReactNode } from "react";
 
 const devUser = {
@@ -22,6 +22,18 @@ export function Show({ when, children }: { when: "signed-in" | "signed-out"; chi
 
 export function useUser() {
   return { isLoaded: true, isSignedIn: true, user: devUser };
+}
+
+export function useAuth() {
+  return { isLoaded: true, isSignedIn: true, userId: devUser.id, orgId: "dev-org" };
+}
+
+export function OrganizationSwitcher() {
+  return <p className="text-xs text-muted-foreground px-2">Dev Company</p>;
+}
+
+export function OrganizationList() {
+  return null;
 }
 
 export function useClerk() {

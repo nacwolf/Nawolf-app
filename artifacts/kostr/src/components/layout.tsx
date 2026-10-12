@@ -1,4 +1,4 @@
-import { useUser, useClerk } from "@clerk/react";
+import { useUser, useClerk, OrganizationSwitcher } from "@clerk/react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -95,7 +95,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-4 border-t border-border">
+          <SidebarFooter className="p-4 border-t border-border space-y-2">
+            <OrganizationSwitcher hidePersonal />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="w-full justify-start gap-2 h-auto py-2 px-2">
