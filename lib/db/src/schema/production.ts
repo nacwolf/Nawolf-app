@@ -1,7 +1,9 @@
-import { pgTable, serial, text, timestamp, numeric, integer, boolean, primaryKey, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, numeric, integer, boolean, primaryKey, date, index, foreignKey, unique } from "drizzle-orm/pg-core";
+import { orgIdColumn, orgIsolation } from "./tenancy";
 import { skusTable } from "./skus";
 
 export const teamMembersTable = pgTable("team_members", {
+  orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   roleDescription: text("role_description"),
@@ -12,11 +14,15 @@ export const teamMembersTable = pgTable("team_members", {
   oncostPercent: numeric("oncost_percent", { precision: 5, scale: 2 }).notNull().default("25"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("team_members_org_id_id_unique").on(t.orgId, t.id),
+  ...orgIsolation("team_members", t.orgId),
+]);
 
 export const skuProductionConfigTable = pgTable("sku_production_config", {
+  orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
-  skuId: integer("sku_id").notNull().unique().references(() => skusTable.id, { onDelete: "cascade" }),
+  skuId: integer("sku_id").notNull().unique(),
   unitsPerDay: integer("units_per_day"),
   cartonSize: integer("carton_size").notNull().default(1),
   shiftHours: numeric("shift_hours", { precision: 4, scale: 2 }).notNull().default("8"),
@@ -29,31 +35,49 @@ export const skuProductionConfigTable = pgTable("sku_production_config", {
   utilitiesCostPerUnit: numeric("utilities_cost_per_unit", { precision: 12, scale: 6 }),
   waterCostPerUnit: numeric("water_cost_per_unit", { precision: 12, scale: 6 }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  foreignKey({ name: "sku_production_config_sku_id_fk", columns: [t.orgId, t.skuId], foreignColumns: [skusTable.orgId, skusTable.id] }).onDelete("cascade"),
+  ...orgIsolation("sku_production_config", t.orgId),
+]);
 
 export const skuTeamMembersTable = pgTable("sku_team_members", {
-  skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
-  teamMemberId: integer("team_member_id").notNull().references(() => teamMembersTable.id, { onDelete: "cascade" }),
-}, (t) => [primaryKey({ columns: [t.skuId, t.teamMemberId] })]);
+  orgId: orgIdColumn(),
+  skuId: integer("sku_id").notNull(),
+  teamMemberId: integer("team_member_id").notNull(),
+}, (t) => [
+  foreignKey({ name: "sku_team_members_sku_id_fk", columns: [t.orgId, t.skuId], foreignColumns: [skusTable.orgId, skusTable.id] }).onDelete("cascade"),
+  foreignKey({ name: "sku_team_members_team_member_id_fk", columns: [t.orgId, t.teamMemberId], foreignColumns: [teamMembersTable.orgId, teamMembersTable.id] }).onDelete("cascade"),
+  ...orgIsolation("sku_team_members", t.orgId),
+  primaryKey({ columns: [t.skuId, t.teamMemberId] }),
+  index("sku_team_members_member_idx").on(t.teamMemberId),
+]);
 
 export const overheadItemsTable = pgTable("overhead_items", {
+  orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   monthlyAmount: numeric("monthly_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   frequency: text("frequency").notNull().default("monthly"),
   sortOrder: integer("sort_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
-});
+}, (t) => [
+  ...orgIsolation("overhead_items", t.orgId),
+]);
 
 export const appSettingsTable = pgTable("app_settings", {
-  key: text("key").primaryKey(),
+  orgId: orgIdColumn(),
+  key: text("key").notNull(),
   value: text("value"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  ...orgIsolation("app_settings", t.orgId),
+  primaryKey({ columns: [t.orgId, t.key] }),
+]);
 
 export const productionConfigHistoryTable = pgTable("production_config_history", {
+  orgId: orgIdColumn(),
   id: serial("id").primaryKey(),
-  skuId: integer("sku_id").notNull().references(() => skusTable.id, { onDelete: "cascade" }),
+  skuId: integer("sku_id").notNull(),
   effectiveDate: text("effective_date").notNull(),
   unitsPerDay: integer("units_per_day"),
   cartonSize: integer("carton_size").notNull().default(1),
@@ -67,4 +91,8 @@ export const productionConfigHistoryTable = pgTable("production_config_history",
   changeNote: text("change_note"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  foreignKey({ name: "production_config_history_sku_id_fk", columns: [t.orgId, t.skuId], foreignColumns: [skusTable.orgId, skusTable.id] }).onDelete("cascade"),
+  ...orgIsolation("production_config_history", t.orgId),
+  index("production_config_history_sku_idx").on(t.skuId),
+]);

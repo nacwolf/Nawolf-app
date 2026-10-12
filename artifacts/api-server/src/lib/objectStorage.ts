@@ -1,238 +1,97 @@
-import { Storage, File } from "@google-cloud/storage";
-import { Readable } from "stream";
-import { randomUUID } from "crypto";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { Transform, type Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
-const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
+// Uploaded files. The browser asks for an upload URL, PUTs the file there, then
+// saves the returned objectPath on a record. Today the URL is this API and files
+// live on local disk (UPLOAD_DIR). shortcut: single-server only; when running
+// more than one API instance, add an S3/R2 driver whose uploadUrl() is a
+// presigned PUT URL. Object paths and the frontend stay the same.
 
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
-      },
-    },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+export const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES ?? 25 * 1024 * 1024);
+
+// /objects/uploads/<orgId>/<uuid>: the org segment ties a file to one company.
+const OBJECT_PATH = /^\/objects\/uploads\/([A-Za-z0-9_-]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 export class ObjectNotFoundError extends Error {
   constructor() {
     super("Object not found");
     this.name = "ObjectNotFoundError";
-    Object.setPrototypeOf(this, ObjectNotFoundError.prototype);
   }
+}
+
+export class ObjectTooLargeError extends Error {
+  constructor() {
+    super(`Upload exceeds ${MAX_UPLOAD_BYTES} bytes`);
+    this.name = "ObjectTooLargeError";
+  }
+}
+
+export interface StoredObject {
+  stream: Readable;
+  contentType: string;
+  size: number;
 }
 
 export class ObjectStorageService {
-  constructor() {}
+  private readonly root: string;
 
-  getPublicObjectSearchPaths(): Array<string> {
-    const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || "";
-    const paths = Array.from(
-      new Set(
-        pathsStr
-          .split(",")
-          .map((path) => path.trim())
-          .filter((path) => path.length > 0)
-      )
-    );
-    if (paths.length === 0) {
-      throw new Error(
-        "PUBLIC_OBJECT_SEARCH_PATHS not set. Create a bucket in 'Object Storage' " +
-          "tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths)."
-      );
-    }
-    return paths;
+  constructor(root = path.resolve(process.env.UPLOAD_DIR ?? "uploads")) {
+    this.root = root;
   }
 
-  getPrivateObjectDir(): string {
-    const dir = process.env.PRIVATE_OBJECT_DIR || "";
-    if (!dir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
-    }
-    return dir;
+  newObjectPath(orgId: string): string {
+    return `/objects/uploads/${orgId}/${randomUUID()}`;
   }
 
-  async searchPublicObject(filePath: string): Promise<File | null> {
-    for (const searchPath of this.getPublicObjectSearchPaths()) {
-      const fullPath = `${searchPath}/${filePath}`;
-
-      const { bucketName, objectName } = parseObjectPath(fullPath);
-      const bucket = objectStorageClient.bucket(bucketName);
-      const file = bucket.file(objectName);
-
-      const [exists] = await file.exists();
-      if (exists) {
-        return file;
-      }
-    }
-
-    return null;
+  uploadUrl(objectPath: string): string {
+    return `/api/storage${objectPath}`;
   }
 
-  async downloadObject(file: File, options?: { isPublic?: boolean; cacheTtlSec?: number }): Promise<Response> {
-    const { isPublic = false, cacheTtlSec = 3600 } = options ?? {};
-    const [metadata] = await file.getMetadata();
-
-    const nodeStream = file.createReadStream();
-    const webStream = Readable.toWeb(nodeStream) as ReadableStream;
-
-    const headers: Record<string, string> = {
-      "Content-Type": (metadata.contentType as string) || "application/octet-stream",
-      "Cache-Control": `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}`,
-    };
-    if (metadata.size) {
-      headers["Content-Length"] = String(metadata.size);
-    }
-
-    return new Response(webStream, { headers });
+  belongsTo(objectPath: string, orgId: string): boolean {
+    return OBJECT_PATH.exec(objectPath)?.[1] === orgId;
   }
 
-  async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
-    }
-
-    const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
-
-    const { bucketName, objectName } = parseObjectPath(fullPath);
-
-    return signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: 900,
-    });
+  private fileFor(objectPath: string): string {
+    const m = OBJECT_PATH.exec(objectPath);
+    if (!m) throw new ObjectNotFoundError();
+    return path.join(this.root, m[1], m[2]);
   }
 
-  async getObjectEntityFile(objectPath: string): Promise<File> {
-    if (!objectPath.startsWith("/objects/")) {
-      throw new ObjectNotFoundError();
-    }
-
-    const parts = objectPath.slice(1).split("/");
-    if (parts.length < 2) {
-      throw new ObjectNotFoundError();
-    }
-
-    const entityId = parts.slice(1).join("/");
-    let entityDir = this.getPrivateObjectDir();
-    if (!entityDir.endsWith("/")) {
-      entityDir = `${entityDir}/`;
-    }
-    const objectEntityPath = `${entityDir}${entityId}`;
-    const { bucketName, objectName } = parseObjectPath(objectEntityPath);
-    const bucket = objectStorageClient.bucket(bucketName);
-    const objectFile = bucket.file(objectName);
-    const [exists] = await objectFile.exists();
-    if (!exists) {
-      throw new ObjectNotFoundError();
-    }
-    return objectFile;
-  }
-
-  normalizeObjectEntityPath(rawPath: string): string {
-    if (!rawPath.startsWith("https://storage.googleapis.com/")) {
-      return rawPath;
-    }
-
-    const url = new URL(rawPath);
-    const rawObjectPath = url.pathname;
-
-    let objectEntityDir = this.getPrivateObjectDir();
-    if (!objectEntityDir.endsWith("/")) {
-      objectEntityDir = `${objectEntityDir}/`;
-    }
-
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
-      return rawObjectPath;
-    }
-
-    const entityId = rawObjectPath.slice(objectEntityDir.length);
-    return `/objects/${entityId}`;
-  }
-
-}
-
-function parseObjectPath(path: string): {
-  bucketName: string;
-  objectName: string;
-} {
-  if (!path.startsWith("/")) {
-    path = `/${path}`;
-  }
-  const pathParts = path.split("/");
-  if (pathParts.length < 3) {
-    throw new Error("Invalid path: must contain at least a bucket name");
-  }
-
-  const bucketName = pathParts[1];
-  const objectName = pathParts.slice(2).join("/");
-
-  return {
-    bucketName,
-    objectName,
-  };
-}
-
-async function signObjectURL({
-  bucketName,
-  objectName,
-  method,
-  ttlSec,
-}: {
-  bucketName: string;
-  objectName: string;
-  method: "GET" | "PUT" | "DELETE" | "HEAD";
-  ttlSec: number;
-}): Promise<string> {
-  const request = {
-    bucket_name: bucketName,
-    object_name: objectName,
-    method,
-    expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
-  };
-  const response = await fetch(
-    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+  // Refuses to overwrite: an upload URL is good for one file.
+  async save(objectPath: string, body: Readable, contentType: string): Promise<void> {
+    const file = this.fileFor(objectPath);
+    await mkdir(path.dirname(file), { recursive: true });
+    const tmp = `${file}.${randomUUID()}.part`;
+    let size = 0;
+    const limit = new Transform({
+      transform(chunk, _enc, cb) {
+        size += chunk.length;
+        cb(size > MAX_UPLOAD_BYTES ? new ObjectTooLargeError() : null, chunk);
       },
-      body: JSON.stringify(request),
-      signal: AbortSignal.timeout(30_000),
+    });
+    try {
+      await pipeline(body, limit, createWriteStream(tmp, { flags: "wx" }));
+      await writeFile(`${file}.json`, JSON.stringify({ contentType, size }), { flag: "wx" });
+      await rename(tmp, file);
+    } catch (err) {
+      await rm(tmp, { force: true });
+      throw err;
     }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
-    );
   }
 
-  const json: unknown = await response.json();
-  if (
-    typeof json !== "object" ||
-    json === null ||
-    !("signed_url" in json) ||
-    typeof (json as Record<string, unknown>).signed_url !== "string"
-  ) {
-    throw new Error("Unexpected response shape from sidecar sign-url endpoint");
+  async open(objectPath: string): Promise<StoredObject> {
+    const file = this.fileFor(objectPath);
+    try {
+      const meta = JSON.parse(await readFile(`${file}.json`, "utf8"));
+      const { size } = await stat(file);
+      return { stream: createReadStream(file), contentType: meta.contentType, size };
+    } catch (err: any) {
+      if (err?.code === "ENOENT") throw new ObjectNotFoundError();
+      throw err;
+    }
   }
-  return (json as { signed_url: string }).signed_url;
 }

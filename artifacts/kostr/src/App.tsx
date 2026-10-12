@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ClerkProvider, Show, useClerk } from '@clerk/react';
+import { ClerkProvider, Show, useClerk, useAuth, OrganizationList } from '@clerk/react';
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from 'wouter';
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -44,8 +44,8 @@ function ClerkQueryClientCacheInvalidator() {
   const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    const unsubscribe = addListener(({ user }) => {
-      const userId = user?.id ?? null;
+    const unsubscribe = addListener(({ user, organization }) => {
+      const userId = user ? `${user.id}:${organization?.id ?? ""}` : null;
       if (
         prevUserIdRef.current !== undefined &&
         prevUserIdRef.current !== userId
@@ -60,13 +60,27 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+// Every company's data is separate; the API rejects requests without an active one.
+function RequireOrganization({ children }: { children: React.ReactNode }) {
+  const { isLoaded, orgId } = useAuth();
+  if (!isLoaded) return null;
+  if (orgId) return <>{children}</>;
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <OrganizationList hidePersonal skipInvitationScreen={false} />
+    </div>
+  );
+}
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   return (
     <>
       <Show when="signed-in">
-        <Layout>
-          <Component />
-        </Layout>
+        <RequireOrganization>
+          <Layout>
+            <Component />
+          </Layout>
+        </RequireOrganization>
       </Show>
       <Show when="signed-out">
         <Redirect to="/sign-in" />

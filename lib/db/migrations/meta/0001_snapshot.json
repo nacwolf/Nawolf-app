@@ -1,0 +1,2585 @@
+{
+  "id": "5bc9d8d3-c026-49b5-84aa-20eb04057b72",
+  "prevId": "4d8b23b4-05e2-41b6-a2bf-679aa7b8b977",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.ingredient_attachments": {
+      "name": "ingredient_attachments",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ingredient_id": {
+          "name": "ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_path": {
+          "name": "object_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "file_type": {
+          "name": "file_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uploaded_at": {
+          "name": "uploaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ingredient_attachments_org_id_idx": {
+          "name": "ingredient_attachments_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "ingredient_attachments_ingredient_idx": {
+          "name": "ingredient_attachments_ingredient_idx",
+          "columns": [
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ingredient_attachments_ingredient_id_fk": {
+          "name": "ingredient_attachments_ingredient_id_fk",
+          "tableFrom": "ingredient_attachments",
+          "columnsFrom": [
+            "org_id",
+            "ingredient_id"
+          ],
+          "tableTo": "ingredients",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "ingredient_attachments_org_isolation": {
+          "name": "ingredient_attachments_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ingredient_components": {
+      "name": "ingredient_components",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "parent_ingredient_id": {
+          "name": "parent_ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "child_ingredient_id": {
+          "name": "child_ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ingredient_components_org_id_idx": {
+          "name": "ingredient_components_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "ingredient_components_parent_idx": {
+          "name": "ingredient_components_parent_idx",
+          "columns": [
+            {
+              "expression": "parent_ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ingredient_components_parent_ingredient_id_fk": {
+          "name": "ingredient_components_parent_ingredient_id_fk",
+          "tableFrom": "ingredient_components",
+          "columnsFrom": [
+            "org_id",
+            "parent_ingredient_id"
+          ],
+          "tableTo": "ingredients",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "ingredient_components_child_ingredient_id_fk": {
+          "name": "ingredient_components_child_ingredient_id_fk",
+          "tableFrom": "ingredient_components",
+          "columnsFrom": [
+            "org_id",
+            "child_ingredient_id"
+          ],
+          "tableTo": "ingredients",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "ingredient_components_org_isolation": {
+          "name": "ingredient_components_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ingredient_prices": {
+      "name": "ingredient_prices",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ingredient_id": {
+          "name": "ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_date": {
+          "name": "effective_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "logged_by": {
+          "name": "logged_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ingredient_prices_org_id_idx": {
+          "name": "ingredient_prices_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "ingredient_prices_ingredient_date_idx": {
+          "name": "ingredient_prices_ingredient_date_idx",
+          "columns": [
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "effective_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ingredient_prices_ingredient_id_fk": {
+          "name": "ingredient_prices_ingredient_id_fk",
+          "tableFrom": "ingredient_prices",
+          "columnsFrom": [
+            "org_id",
+            "ingredient_id"
+          ],
+          "tableTo": "ingredients",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "ingredient_prices_org_isolation": {
+          "name": "ingredient_prices_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ingredient_tier_price_history": {
+      "name": "ingredient_tier_price_history",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ingredient_id": {
+          "name": "ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tier": {
+          "name": "tier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "old_price": {
+          "name": "old_price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_price": {
+          "name": "new_price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "old_description": {
+          "name": "old_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_description": {
+          "name": "new_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "changed_by": {
+          "name": "changed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "changed_at": {
+          "name": "changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ingredient_tier_price_history_org_id_idx": {
+          "name": "ingredient_tier_price_history_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "ingredient_tier_history_ingredient_idx": {
+          "name": "ingredient_tier_history_ingredient_idx",
+          "columns": [
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "ingredient_tier_price_history_ingredient_id_fk": {
+          "name": "ingredient_tier_price_history_ingredient_id_fk",
+          "tableFrom": "ingredient_tier_price_history",
+          "columnsFrom": [
+            "org_id",
+            "ingredient_id"
+          ],
+          "tableTo": "ingredients",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "ingredient_tier_price_history_org_isolation": {
+          "name": "ingredient_tier_price_history_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ingredients": {
+      "name": "ingredients",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sub_category": {
+          "name": "sub_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supplier": {
+          "name": "supplier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_tier1": {
+          "name": "price_tier1",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_tier1_description": {
+          "name": "price_tier1_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_tier2": {
+          "name": "price_tier2",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "price_tier2_description": {
+          "name": "price_tier2_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country_of_origin": {
+          "name": "country_of_origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_url": {
+          "name": "photo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_content_type": {
+          "name": "photo_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ingredients_org_id_idx": {
+          "name": "ingredients_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ingredients_org_id_id_unique": {
+          "name": "ingredients_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "ingredients_org_isolation": {
+          "name": "ingredients_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.cost_lines": {
+      "name": "cost_lines",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ingredient_id": {
+          "name": "ingredient_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "packaging_item_id": {
+          "name": "packaging_item_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quantity_per_unit": {
+          "name": "quantity_per_unit",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "cost_lines_org_id_idx": {
+          "name": "cost_lines_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "cost_lines_sku_idx": {
+          "name": "cost_lines_sku_idx",
+          "columns": [
+            {
+              "expression": "sku_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "cost_lines_ingredient_idx": {
+          "name": "cost_lines_ingredient_idx",
+          "columns": [
+            {
+              "expression": "ingredient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "cost_lines_packaging_idx": {
+          "name": "cost_lines_packaging_idx",
+          "columns": [
+            {
+              "expression": "packaging_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "cost_lines_sku_id_fk": {
+          "name": "cost_lines_sku_id_fk",
+          "tableFrom": "cost_lines",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "cost_lines_ingredient_id_fk": {
+          "name": "cost_lines_ingredient_id_fk",
+          "tableFrom": "cost_lines",
+          "columnsFrom": [
+            "org_id",
+            "ingredient_id"
+          ],
+          "tableTo": "ingredients",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        },
+        "cost_lines_packaging_item_id_fk": {
+          "name": "cost_lines_packaging_item_id_fk",
+          "tableFrom": "cost_lines",
+          "columnsFrom": [
+            "org_id",
+            "packaging_item_id"
+          ],
+          "tableTo": "packaging_items",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "cost_lines_org_isolation": {
+          "name": "cost_lines_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sku_certificate_files": {
+      "name": "sku_certificate_files",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_path": {
+          "name": "object_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uploaded_at": {
+          "name": "uploaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sku_certificate_files_org_id_idx": {
+          "name": "sku_certificate_files_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "sku_certificate_files_sku_idx": {
+          "name": "sku_certificate_files_sku_idx",
+          "columns": [
+            {
+              "expression": "sku_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "sku_certificate_files_sku_id_fk": {
+          "name": "sku_certificate_files_sku_id_fk",
+          "tableFrom": "sku_certificate_files",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "sku_certificate_files_org_isolation": {
+          "name": "sku_certificate_files_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sku_product_photos": {
+      "name": "sku_product_photos",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "object_path": {
+          "name": "object_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "uploaded_at": {
+          "name": "uploaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "uploaded_by": {
+          "name": "uploaded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "sku_product_photos_org_id_idx": {
+          "name": "sku_product_photos_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "sku_product_photos_sku_idx": {
+          "name": "sku_product_photos_sku_idx",
+          "columns": [
+            {
+              "expression": "sku_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "sku_product_photos_sku_id_fk": {
+          "name": "sku_product_photos_sku_id_fk",
+          "tableFrom": "sku_product_photos",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "sku_product_photos_org_isolation": {
+          "name": "sku_product_photos_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sku_snapshots": {
+      "name": "sku_snapshots",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_date": {
+          "name": "snapshot_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_cogs": {
+          "name": "total_cogs",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sell_price": {
+          "name": "sell_price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "gross_margin": {
+          "name": "gross_margin",
+          "type": "numeric(10, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "triggered_by": {
+          "name": "triggered_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sku_snapshots_org_id_idx": {
+          "name": "sku_snapshots_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "sku_snapshots_sku_date_idx": {
+          "name": "sku_snapshots_sku_date_idx",
+          "columns": [
+            {
+              "expression": "sku_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "snapshot_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "sku_snapshots_sku_id_fk": {
+          "name": "sku_snapshots_sku_id_fk",
+          "tableFrom": "sku_snapshots",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "sku_snapshots_org_isolation": {
+          "name": "sku_snapshots_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.skus": {
+      "name": "skus",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_code": {
+          "name": "sku_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name_thai": {
+          "name": "name_thai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brand_name": {
+          "name": "brand_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "customer_name": {
+          "name": "customer_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit_size": {
+          "name": "unit_size",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_weight": {
+          "name": "net_weight",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_weight_unit": {
+          "name": "net_weight_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gross_weight": {
+          "name": "gross_weight",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gross_weight_unit": {
+          "name": "gross_weight_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "units_per_carton": {
+          "name": "units_per_carton",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_gross_weight": {
+          "name": "carton_gross_weight",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_gross_weight_unit": {
+          "name": "carton_gross_weight_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_dim_l": {
+          "name": "carton_dim_l",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_dim_w": {
+          "name": "carton_dim_w",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_dim_h": {
+          "name": "carton_dim_h",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shelf_life": {
+          "name": "shelf_life",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shelf_life_unit": {
+          "name": "shelf_life_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "storage_condition": {
+          "name": "storage_condition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sell_price": {
+          "name": "sell_price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ex_factory_price": {
+          "name": "ex_factory_price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fob_price": {
+          "name": "fob_price",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moq": {
+          "name": "moq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moq_unit": {
+          "name": "moq_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fda_number": {
+          "name": "fda_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "barcode_ean13": {
+          "name": "barcode_ean13",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "halal_certified": {
+          "name": "halal_certified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "gmp_certified": {
+          "name": "gmp_certified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "haccp_certified": {
+          "name": "haccp_certified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "organic_certified": {
+          "name": "organic_certified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "other_certifications": {
+          "name": "other_certifications",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "product_description": {
+          "name": "product_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingredients_list_thai": {
+          "name": "ingredients_list_thai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingredients_list_english": {
+          "name": "ingredients_list_english",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingredient_lines": {
+          "name": "ingredient_lines",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "allergen_info": {
+          "name": "allergen_info",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nutritional_info": {
+          "name": "nutritional_info",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nutrition_doc_path": {
+          "name": "nutrition_doc_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nutrition_doc_content_type": {
+          "name": "nutrition_doc_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_url": {
+          "name": "photo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_content_type": {
+          "name": "photo_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_file_url": {
+          "name": "label_file_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_file_content_type": {
+          "name": "label_file_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "label_file_name": {
+          "name": "label_file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spec_sheet_url": {
+          "name": "spec_sheet_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spec_sheet_content_type": {
+          "name": "spec_sheet_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spec_sheet_name": {
+          "name": "spec_sheet_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dieline_url": {
+          "name": "dieline_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dieline_content_type": {
+          "name": "dieline_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dieline_name": {
+          "name": "dieline_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "skus_org_id_idx": {
+          "name": "skus_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "skus_org_id_id_unique": {
+          "name": "skus_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        },
+        "skus_org_sku_code_unique": {
+          "name": "skus_org_sku_code_unique",
+          "columns": [
+            "org_id",
+            "sku_code"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "skus_org_isolation": {
+          "name": "skus_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.app_settings": {
+      "name": "app_settings",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "app_settings_org_id_idx": {
+          "name": "app_settings_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "app_settings_org_id_key_pk": {
+          "name": "app_settings_org_id_key_pk",
+          "columns": [
+            "org_id",
+            "key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "app_settings_org_isolation": {
+          "name": "app_settings_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.overhead_items": {
+      "name": "overhead_items",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "monthly_amount": {
+          "name": "monthly_amount",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "frequency": {
+          "name": "frequency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'monthly'"
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {
+        "overhead_items_org_id_idx": {
+          "name": "overhead_items_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "overhead_items_org_isolation": {
+          "name": "overhead_items_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.production_config_history": {
+      "name": "production_config_history",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_date": {
+          "name": "effective_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "units_per_day": {
+          "name": "units_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_size": {
+          "name": "carton_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "shift_hours": {
+          "name": "shift_hours",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'8'"
+        },
+        "production_days_per_month": {
+          "name": "production_days_per_month",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 20
+        },
+        "team_member_ids": {
+          "name": "team_member_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "labor_per_unit": {
+          "name": "labor_per_unit",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "overhead_per_unit": {
+          "name": "overhead_per_unit",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_day_cost": {
+          "name": "total_day_cost",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "change_reason": {
+          "name": "change_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "change_note": {
+          "name": "change_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "production_config_history_org_id_idx": {
+          "name": "production_config_history_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "production_config_history_sku_idx": {
+          "name": "production_config_history_sku_idx",
+          "columns": [
+            {
+              "expression": "sku_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "production_config_history_sku_id_fk": {
+          "name": "production_config_history_sku_id_fk",
+          "tableFrom": "production_config_history",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "production_config_history_org_isolation": {
+          "name": "production_config_history_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sku_production_config": {
+      "name": "sku_production_config",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "units_per_day": {
+          "name": "units_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "carton_size": {
+          "name": "carton_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "shift_hours": {
+          "name": "shift_hours",
+          "type": "numeric(4, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'8'"
+        },
+        "production_days_per_month": {
+          "name": "production_days_per_month",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 20
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "labor_cost_per_unit": {
+          "name": "labor_cost_per_unit",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "overhead_cost_per_unit": {
+          "name": "overhead_cost_per_unit",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kwh_per_unit": {
+          "name": "kwh_per_unit",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "liters_per_unit": {
+          "name": "liters_per_unit",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "utilities_cost_per_unit": {
+          "name": "utilities_cost_per_unit",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "water_cost_per_unit": {
+          "name": "water_cost_per_unit",
+          "type": "numeric(12, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sku_production_config_org_id_idx": {
+          "name": "sku_production_config_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "sku_production_config_sku_id_fk": {
+          "name": "sku_production_config_sku_id_fk",
+          "tableFrom": "sku_production_config",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sku_production_config_sku_id_unique": {
+          "name": "sku_production_config_sku_id_unique",
+          "columns": [
+            "sku_id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "sku_production_config_org_isolation": {
+          "name": "sku_production_config_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sku_team_members": {
+      "name": "sku_team_members",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "sku_id": {
+          "name": "sku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_member_id": {
+          "name": "team_member_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "sku_team_members_org_id_idx": {
+          "name": "sku_team_members_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "sku_team_members_member_idx": {
+          "name": "sku_team_members_member_idx",
+          "columns": [
+            {
+              "expression": "team_member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "sku_team_members_sku_id_fk": {
+          "name": "sku_team_members_sku_id_fk",
+          "tableFrom": "sku_team_members",
+          "columnsFrom": [
+            "org_id",
+            "sku_id"
+          ],
+          "tableTo": "skus",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "sku_team_members_team_member_id_fk": {
+          "name": "sku_team_members_team_member_id_fk",
+          "tableFrom": "sku_team_members",
+          "columnsFrom": [
+            "org_id",
+            "team_member_id"
+          ],
+          "tableTo": "team_members",
+          "columnsTo": [
+            "org_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sku_team_members_sku_id_team_member_id_pk": {
+          "name": "sku_team_members_sku_id_team_member_id_pk",
+          "columns": [
+            "sku_id",
+            "team_member_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "sku_team_members_org_isolation": {
+          "name": "sku_team_members_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.team_members": {
+      "name": "team_members",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role_description": {
+          "name": "role_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "department": {
+          "name": "department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'production'"
+        },
+        "pay_type": {
+          "name": "pay_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'hourly'"
+        },
+        "hourly_wage": {
+          "name": "hourly_wage",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "monthly_salary": {
+          "name": "monthly_salary",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "oncost_percent": {
+          "name": "oncost_percent",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'25'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "team_members_org_id_idx": {
+          "name": "team_members_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "team_members_org_id_id_unique": {
+          "name": "team_members_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "team_members_org_isolation": {
+          "name": "team_members_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.packaging_items": {
+      "name": "packaging_items",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.org_id', true), '')"
+        },
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name_english": {
+          "name": "name_english",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name_thai": {
+          "name": "name_thai",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category": {
+          "name": "category",
+          "type": "packaging_category",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supplier": {
+          "name": "supplier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit": {
+          "name": "unit",
+          "type": "packaging_unit",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'piece'"
+        },
+        "unit_cost": {
+          "name": "unit_cost",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "moq": {
+          "name": "moq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lead_time_days": {
+          "name": "lead_time_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_object_path": {
+          "name": "photo_object_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_content_type": {
+          "name": "photo_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_file_name": {
+          "name": "photo_file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quotation_object_path": {
+          "name": "quotation_object_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quotation_content_type": {
+          "name": "quotation_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quotation_file_name": {
+          "name": "quotation_file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spec_doc_object_path": {
+          "name": "spec_doc_object_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spec_doc_content_type": {
+          "name": "spec_doc_content_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "spec_doc_file_name": {
+          "name": "spec_doc_file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "specs": {
+          "name": "specs",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "packaging_items_org_id_idx": {
+          "name": "packaging_items_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "packaging_items_org_id_id_unique": {
+          "name": "packaging_items_org_id_id_unique",
+          "columns": [
+            "org_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "packaging_items_org_isolation": {
+          "name": "packaging_items_org_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "org_id = nullif(current_setting('app.org_id', true), '')",
+          "withCheck": "org_id = nullif(current_setting('app.org_id', true), '')"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.packaging_category": {
+      "name": "packaging_category",
+      "schema": "public",
+      "values": [
+        "sachet_primary_bag",
+        "inner_bag",
+        "box_carton",
+        "sticker_label",
+        "oxygen_absorber",
+        "desiccant",
+        "shrink_wrap",
+        "tray_insert",
+        "printing_block",
+        "other"
+      ]
+    },
+    "public.packaging_unit": {
+      "name": "packaging_unit",
+      "schema": "public",
+      "values": [
+        "piece",
+        "roll",
+        "kg",
+        "meter"
+      ]
+    }
+  },
+  "schemas": {},
+  "views": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

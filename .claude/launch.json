@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kostr",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@workspace/kostr", "run", "dev"],
+      "port": 3003,
+      "env": {
+        "PORT": "3003",
+        "BASE_PATH": "/",
+        "VITE_CLERK_PUBLISHABLE_KEY": "pk_test_dev_mock_do_not_use"
+      }
+    }
+  ]
+}
