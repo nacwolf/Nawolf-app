@@ -22,6 +22,11 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    // ponytail: no Clerk secret key locally -> swap in a dev stand-in so auth
+    // routes don't 401. No effect once CLERK_SECRET_KEY is set (Replit deploys).
+    alias: process.env.CLERK_SECRET_KEY
+      ? undefined
+      : { "@clerk/express": path.resolve(artifactDir, "src/lib/clerk-dev-mock.ts") },
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:

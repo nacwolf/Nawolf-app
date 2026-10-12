@@ -50,6 +50,12 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+      // ponytail: local dev sentinel key (set in .claude/launch.json) swaps in a
+      // Clerk stand-in so auth-gated pages render without a real Clerk account.
+      // No effect for a real key (Replit deploys always set one).
+      ...(process.env.VITE_CLERK_PUBLISHABLE_KEY === "pk_test_dev_mock_do_not_use"
+        ? { "@clerk/react": path.resolve(import.meta.dirname, "src/lib/clerk-dev-mock.tsx") }
+        : {}),
     },
     dedupe: ["react", "react-dom"],
   },
@@ -62,6 +68,14 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // Local dev only (vite build/preview ignore this): bridges /api to the
+    // api-server, which runs on its own port. Override with API_PROXY_TARGET.
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET || "http://localhost:8081",
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],
